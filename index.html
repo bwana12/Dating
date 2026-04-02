@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AURA — Find Your Frequency</title>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg: #090b12; --p1: #7c5cfc; --accent: #fc5c9c; --text: #f0f2ff; --glass: rgba(255,255,255,0.08);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; overflow: hidden; height: 100vh; }
+
+#app { max-width: 430px; margin: 0 auto; height: 100vh; position: relative; background: var(--bg); display: flex; flex-direction: column; }
+
+/* PAGES */
+.page { position: absolute; inset: 0; padding: 20px; display: none; flex-direction: column; background: var(--bg); z-index: 10; }
+.page.active { display: flex; }
+
+/* UI */
+.grad-text { background: linear-gradient(135deg, var(--p1), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.btn { width: 100%; padding: 16px; border-radius: 16px; border: none; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
+.btn-primary { background: linear-gradient(135deg, var(--p1), #4f8ef7); color: white; }
+.btn-ghost { background: var(--glass); color: white; margin-top: 10px; }
+.input { width: 100%; background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 15px; border-radius: 12px; color: white; margin-bottom: 12px; outline: none; }
+
+/* LOADER */
+#loading-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+#loading-overlay.hidden { display: none; }
+.spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--p1); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* CHAT */
+#chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 10px 0; }
+.msg { max-width: 80%; padding: 12px; border-radius: 15px; font-size: 14px; }
+.msg.sent { align-self: flex-end; background: var(--p1); }
+.msg.received { align-self: flex-start; background: var(--glass); }
+
+/* NAV */
+nav { height: 70px; background: rgba(9,11,18,0.95); display: none; justify-content: space-around; align-items: center; border-top: 1px solid var(--glass); }
+nav.visible { display: flex; }
+</style>
+</head>
+<body>
+
+<div id="app">
+    <!-- LOADING FAILSAFE -->
+    <div id="loading-overlay">
+        <h1 class="grad-text" style="font-family:'Syne'; font-size:40px;">AURA</h1>
+        <div class="spinner"></div>
+        <p id="load-status" style="font-size:12px; color:rgba(255,255,255,0.4);">Connecting to Frequency...</p>
+    </div>
+
+    <!-- LANDING -->
+    <div id="page-landing" class="page">
+        <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+            <h1 class="grad-text" style="font-family:'Syne'; font-size:60px;">AURA</h1>
+            <p style="margin-bottom:40px; color:rgba(255,255,255,0.6); letter-spacing:3px;">FIND YOUR FREQUENCY</p>
+            <button class="btn btn-primary" onclick="showPage('register')">Create Account</button>
+            <button class="btn btn-ghost" onclick="showPage('login')">Sign In</button>
+        </div>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="page-register" class="page">
+        <h2>Join AURA</h2>
+        <input type="text" id="reg-name" class="input" placeholder="Display Name">
+        <input type="email" id="reg-email" class="input" placeholder="Email">
+        <input type="password" id="reg-pass" class="input" placeholder="Password (min 6 chars)">
+        <button class="btn btn-primary" onclick="handleAuth('register')">Start Swiping</button>
+        <button class="btn btn-ghost" onclick="showPage('landing')">Back</button>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="page-login" class="page">
+        <h2>Welcome Back</h2>
+        <input type="email" id="log-email" class="input" placeholder="Email">
+        <input type="password" id="log-pass" class="input" placeholder="Password">
+        <button class="btn btn-primary" onclick="handleAuth('login')">Sign In</button>
+        <button class="btn btn-ghost" onclick="showPage('landing')">Back</button>
+    </div>
+
+    <!-- MATCHES -->
+    <div id="page-matches" class="page">
+        <h2 style="font-family:'Syne';">Conversations</h2>
+        <div id="matches-list" style="margin-top:20px;"></div>
+    </div>
+
+    <!-- CHAT -->
+    <div id="page-chat" class="page">
+        <div style="display:flex; align-items:center; gap:15px; margin-bottom:10px;">
+            <button onclick="showPage('matches')" style="background:none; border:none; color:white; font-size:20px; cursor:pointer;">←</button>
+            <h3 id="chat-title">Chat</h3>
+        </div>
+        <div id="chat-messages"></div>
+        <div style="display:flex; gap:10px; padding:10px 0;">
+            <input type="text" id="chat-input" class="input" style="margin:0;" placeholder="Message...">
+            <button class="btn btn-primary" style="width:auto;" onclick="sendMessage()">➤</button>
+        </div>
+    </div>
+
+    <!-- NAV -->
+    <nav id="navbar">
+        <div onclick="showPage('matches')" style="cursor:pointer; font-size:24px;">💜</div>
+        <div onclick="logout()" style="cursor:pointer; font-size:24px;">👤</div>
+    </nav>
+</div>
+
+<script>
+// --- CONFIG ---
+const firebaseConfig = {
+  apiKey: "AIzaSyDsc7eq6y-FmSp5QyNg9PTlg5ZVbUlU_Ok",
+  authDomain: "dating-f5c7f.firebaseapp.com",
+  projectId: "dating-f5c7f",
+  storageBucket: "dating-f5c7f.firebasestorage.app",
+  messagingSenderId: "1068091857220",
+  appId: "1:1068091857220:web:ff9a4fb6625f978bac1f11"
+};
+
+// --- INIT ---
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+const loader = document.getElementById('loading-overlay');
+const loadStatus = document.getElementById('load-status');
+
+// --- FAILSAFE TIMEOUT ---
+// If Firebase takes more than 6 seconds, hide loader and show landing anyway
+const failsafe = setTimeout(() => {
+    if (!loader.classList.contains('hidden')) {
+        loader.classList.add('hidden');
+        showPage('landing');
+        console.warn("Firebase Auth timed out. Check Authorized Domains.");
+    }
+}, 6000);
+
+// --- AUTH STATE ---
+auth.onAuthStateChanged(user => {
+    clearTimeout(failsafe); // Cancel failsafe if Firebase answers
+    loader.classList.add('hidden');
+    
+    if (user) {
+        showPage('matches');
+    } else {
+        showPage('landing');
+    }
+});
+
+// --- FUNCTIONS ---
+function showPage(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + id).classList.add('active');
+    document.getElementById('navbar').classList.toggle('visible', id === 'matches');
+    if (id === 'matches') renderMatches();
+}
+
+async function handleAuth(type) {
+    const email = document.getElementById(type === 'login' ? 'log-email' : 'reg-email').value;
+    const pass = document.getElementById(type === 'login' ? 'log-pass' : 'reg-pass').value;
+    const name = type === 'register' ? document.getElementById('reg-name').value : '';
+
+    try {
+        if (type === 'register') {
+            const res = await auth.createUserWithEmailAndPassword(email, pass);
+            await db.collection('users').doc(res.user.uid).set({ name, email, matches: ['bot1'] });
+        } else {
+            await auth.signInWithEmailAndPassword(email, pass);
+        }
+    } catch (e) { alert(e.message); }
+}
+
+const MOCK_DATA = { bot1: { name: 'Sofia', emoji: '🌺' } };
+
+async function renderMatches() {
+    const list = document.getElementById('matches-list');
+    list.innerHTML = `<div onclick="openChat('bot1', 'Sofia')" style="background:var(--glass); padding:20px; border-radius:15px; cursor:pointer;"><b>Sofia 🌺</b><br><small>Online</small></div>`;
+}
+
+let activeChatId = null;
+let unsubscribe = null;
+
+function openChat(targetId, name) {
+    const myId = auth.currentUser.uid;
+    activeChatId = myId < targetId ? `${myId}_${targetId}` : `${targetId}_${myId}`;
+    document.getElementById('chat-title').innerText = name;
+    showPage('chat');
+    listen();
+}
+
+function listen() {
+    if (unsubscribe) unsubscribe();
+    const box = document.getElementById('chat-messages');
+    box.innerHTML = '';
+
+    unsubscribe = db.collection('chats').doc(activeChatId).collection('messages')
+        .orderBy('timestamp', 'asc')
+        .onSnapshot(snap => {
+            snap.docChanges().forEach(change => {
+                if (change.type === 'added') {
+                    const d = change.doc.data();
+                    const div = document.createElement('div');
+                    div.className = `msg ${d.sender === auth.currentUser.uid ? 'sent' : 'received'}`;
+                    div.innerText = d.text;
+                    box.appendChild(div);
+                    box.scrollTop = box.scrollHeight;
+                }
+            });
+        });
+}
+
+async function sendMessage() {
+    const input = document.getElementById('chat-input');
+    if (!input.value) return;
+    const text = input.value;
+    input.value = '';
+    
+    await db.collection('chats').doc(activeChatId).collection('messages').add({
+        text, sender: auth.currentUser.uid, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+}
+
+function logout() { auth.signOut(); location.reload(); }
+</script>
+</body>
+</html>
