@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AURA — Find Your Frequency</title>
+
+<!-- Firebase SDKs (Compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg: #090b12; --bg2: #0f1220; --p1: #7c5cfc; --accent: #fc5c9c; --text: #f0f2ff; --text2: #8b93b8; --glass: rgba(255,255,255,0.08); --green: #23e5a0;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; overflow: hidden; height: 100dvh; }
+
+#app { max-width: 430px; margin: 0 auto; height: 100dvh; position: relative; background: var(--bg); display: flex; flex-direction: column; border-left: 1px solid rgba(255,255,255,0.1); border-right: 1px solid rgba(255,255,255,0.1); }
+
+/* LOADER FAILSAFE */
+#loading-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+#loading-overlay.hidden { display: none; }
+.spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--p1); border-radius: 50%; animation: spin 1s linear infinite; margin-top: 20px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* PAGES */
+.page { position: absolute; inset: 0; padding: 20px; display: none; flex-direction: column; background: var(--bg); z-index: 10; overflow-y: auto; padding-bottom: 100px; }
+.page.active { display: flex; }
+
+/* SWIPE CARDS */
+.discovery-stack { flex: 1; position: relative; margin-top: 10px; min-height: 450px; }
+.swipe-card { position: absolute; inset: 0; background: var(--bg2); border-radius: 24px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); transition: transform 0.5s, opacity 0.3s; }
+.card-img { height: 70%; width: 100%; object-fit: cover; background: #1a1f35; }
+.card-info { padding: 15px; background: linear-gradient(to top, var(--bg2) 80%, transparent); position: absolute; bottom: 0; width: 100%; }
+
+/* UI */
+.grad-text { background: linear-gradient(135deg, var(--p1), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.btn { width: 100%; padding: 16px; border-radius: 16px; border: none; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
+.btn-primary { background: linear-gradient(135deg, var(--p1), #4f8ef7); color: white; }
+.btn-ghost { background: var(--glass); color: white; margin-top: 10px; }
+.input { width: 100%; background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 15px; border-radius: 12px; color: white; margin-bottom: 12px; outline: none; }
+
+/* NAV */
+nav { height: 75px; position: absolute; bottom: 0; width: 100%; background: rgba(9,11,18,0.95); display: none; justify-content: space-around; align-items: center; border-top: 1px solid var(--glass); backdrop-filter: blur(10px); z-index: 100; }
+nav.visible { display: flex; }
+.nav-item { color: var(--text2); cursor: pointer; font-size: 22px; }
+.nav-item.active { color: var(--p1); }
+
+/* CHAT */
+#chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 0; }
+.msg { max-width: 80%; padding: 12px; border-radius: 18px; font-size: 14px; }
+.msg.sent { align-self: flex-end; background: var(--p1); border-bottom-right-radius: 4px; }
+.msg.received { align-self: flex-start; background: var(--glass); border-bottom-left-radius: 4px; }
+
+#match-popup { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 10000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px; }
+</style>
+</head>
+<body>
+
+<div id="app">
+    <!-- LOADING FAILSAFE -->
+    <div id="loading-overlay">
+        <h1 class="grad-text" style="font-family:'Syne'; font-size:40px;">AURA</h1>
+        <div class="spinner"></div>
+        <p id="load-status" style="margin-top:15px; font-size:12px; color:rgba(255,255,255,0.3);">Connecting to Frequency...</p>
+    </div>
+
+    <!-- MATCH POPUP -->
+    <div id="match-popup">
+        <h1 class="grad-text" style="font-family:'Syne'; font-size:45px;">NEW MATCH!</h1>
+        <div style="display:flex; gap:15px; margin:30px 0;">
+            <div id="p1-match" style="width:80px; height:80px; border-radius:50%; border:2px solid var(--p1); overflow:hidden;"></div>
+            <div id="p2-match" style="width:80px; height:80px; border-radius:50%; border:2px solid var(--accent); overflow:hidden;"></div>
+        </div>
+        <button class="btn btn-primary" onclick="this.parentElement.style.display='none'">Keep Swiping</button>
+    </div>
+
+    <!-- PAGE: LANDING -->
+    <div id="page-landing" class="page">
+        <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+            <h1 class="grad-text" style="font-family:'Syne'; font-size:60px;">AURA</h1>
+            <p style="margin-bottom:40px; color:var(--text2); letter-spacing:3px;">FIND YOUR FREQUENCY</p>
+            <button class="btn btn-primary" onclick="showPage('register')">Create Account</button>
+            <button class="btn btn-ghost" onclick="showPage('login')">Sign In</button>
+        </div>
+    </div>
+
+    <!-- PAGE: REGISTER -->
+    <div id="page-register" class="page">
+        <h2>Join the Frequency</h2>
+        <div style="text-align:center; margin:20px 0;">
+            <label for="pfp-input" style="cursor:pointer;">
+                <div id="pfp-preview" style="width:100px; height:100px; background:var(--glass); border-radius:50%; margin:0 auto; display:flex; align-items:center; justify-content:center; border:2px dashed var(--p1); overflow:hidden;">📸</div>
+            </label>
+            <input type="file" id="pfp-input" hidden accept="image/*" onchange="previewImg(this)">
+        </div>
+        <input type="text" id="reg-name" class="input" placeholder="Display Name">
+        <input type="number" id="reg-age" class="input" placeholder="Age">
+        <input type="email" id="reg-email" class="input" placeholder="Email">
+        <input type="password" id="reg-pass" class="input" placeholder="Password (6+ chars)">
+        <button class="btn btn-primary" onclick="handleAuth('register')">Register</button>
+        <button class="btn btn-ghost" onclick="showPage('landing')">Back</button>
+    </div>
+
+    <!-- PAGE: LOGIN -->
+    <div id="page-login" class="page">
+        <h2>Welcome Back</h2>
+        <input type="email" id="log-email" class="input" placeholder="Email" style="margin-top:20px;">
+        <input type="password" id="log-pass" class="input" placeholder="Password">
+        <button class="btn btn-primary" onclick="handleAuth('login')">Sign In</button>
+        <button class="btn btn-ghost" onclick="showPage('landing')">Back</button>
+    </div>
+
+    <!-- PAGE: DISCOVER -->
+    <div id="page-discover" class="page">
+        <h2 class="grad-text" style="font-family:'Syne';">Discover</h2>
+        <div class="discovery-stack" id="swipe-stack"></div>
+        <div style="display:flex; gap:15px; margin-top:20px;">
+            <button class="btn btn-ghost" style="border-radius:50%; width:60px; height:60px;" onclick="swipe('left')">✕</button>
+            <button class="btn btn-primary" style="border-radius:50%; width:75px; height:75px;" onclick="swipe('right')">💜</button>
+        </div>
+    </div>
+
+    <!-- PAGE: MATCHES -->
+    <div id="page-matches" class="page">
+        <h2 style="font-family:'Syne';">Matches</h2>
+        <div id="matches-list" style="margin-top:20px; display:flex; flex-direction:column; gap:10px;"></div>
+    </div>
+
+    <!-- PAGE: CHAT -->
+    <div id="page-chat" class="page">
+        <div style="display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--glass); padding-bottom:10px;">
+            <button onclick="showPage('matches')" style="background:none; border:none; color:white; font-size:20px;">←</button>
+            <b id="chat-user-name">Chat</b>
+        </div>
+        <div id="chat-messages"></div>
+        <div style="display:flex; gap:10px; padding:10px 0;">
+            <input type="text" id="chat-input" class="input" style="margin:0;" placeholder="Message...">
+            <button class="btn btn-primary" style="width:auto;" onclick="sendMessage()">➤</button>
+        </div>
+    </div>
+
+    <!-- PAGE: PROFILE -->
+    <div id="page-profile" class="page">
+        <div style="text-align:center; padding-top:20px;">
+            <div id="my-prof-img" style="width:120px; height:120px; border-radius:50%; border:3px solid var(--p1); margin:0 auto; overflow:hidden;"></div>
+            <h2 id="my-prof-name" style="margin-top:15px;">User Name</h2>
+            <button class="btn btn-ghost" style="margin-top:30px;" onclick="auth.signOut(); location.reload();">Logout</button>
+        </div>
+    </div>
+
+    <!-- NAV -->
+    <nav id="navbar">
+        <div class="nav-item" onclick="showPage('discover')">🔥</div>
+        <div class="nav-item" onclick="showPage('matches')">💜</div>
+        <div class="nav-item" onclick="showPage('profile')">👤</div>
+    </nav>
+</div>
+
+<script>
+// --- CONFIG ---
+const firebaseConfig = {
+  apiKey: "AIzaSyDsc7eq6y-FmSp5QyNg9PTlg5ZVbUlU_Ok",
+  authDomain: "dating-f5c7f.firebaseapp.com",
+  projectId: "dating-f5c7f",
+  storageBucket: "dating-f5c7f.firebasestorage.app",
+  messagingSenderId: "1068091857220",
+  appId: "1:1068091857220:web:ff9a4fb6625f978bac1f11"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
+
+const loader = document.getElementById('loading-overlay');
+let myData = null;
+let discoverUsers = [];
+let currentIdx = 0;
+
+// --- FAILSAFE ---
+setTimeout(() => {
+    if(!loader.classList.contains('hidden')) {
+        loader.classList.add('hidden');
+        if(!auth.currentUser) showPage('landing');
+    }
+}, 5000);
+
+// --- AUTH STATE ---
+auth.onAuthStateChanged(async user => {
+    if (user) {
+        try {
+            const doc = await db.collection('users').doc(user.uid).get();
+            if (doc.exists) {
+                myData = doc.data();
+                loader.classList.add('hidden');
+                showPage('discover');
+            } else {
+                // If auth exists but no doc, force register
+                auth.signOut();
+                showPage('landing');
+            }
+        } catch (e) { loader.classList.add('hidden'); showPage('landing'); }
+    } else {
+        loader.classList.add('hidden');
+        showPage('landing');
+    }
+});
+
+// --- CORE FUNCTIONS ---
+function showPage(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + id).classList.add('active');
+    document.getElementById('navbar').classList.toggle('visible', ['discover', 'matches', 'profile'].includes(id));
+    if(id === 'discover') loadDiscovery();
+    if(id === 'matches') renderMatches();
+    if(id === 'profile') renderProfile();
+}
+
+async function handleAuth(type) {
+    const email = document.getElementById(type === 'login' ? 'log-email' : 'reg-email').value;
+    const pass = document.getElementById(type === 'login' ? 'log-pass' : 'reg-pass').value;
+
+    try {
+        if (type === 'register') {
+            const name = document.getElementById('reg-name').value;
+            const age = document.getElementById('reg-age').value;
+            const file = document.getElementById('pfp-input').files[0];
+            if(!file || !name) return alert("Photo and Name required");
+
+            const res = await auth.createUserWithEmailAndPassword(email, pass);
+            const ref = storage.ref(`pfps/${res.user.uid}`);
+            await ref.put(file);
+            const url = await ref.getDownloadURL();
+            
+            await db.collection('users').doc(res.user.uid).set({
+                uid: res.user.uid, name, age, photoURL: url, likes: [], matches: []
+            });
+        } else {
+            await auth.signInWithEmailAndPassword(email, pass);
+        }
+    } catch (e) { alert(e.message); }
+}
+
+async function loadDiscovery() {
+    const stack = document.getElementById('swipe-stack');
+    stack.innerHTML = '<p style="text-align:center; padding:50px;">Searching for frequencies...</p>';
+    
+    const snap = await db.collection('users').limit(10).get();
+    discoverUsers = [];
+    snap.forEach(doc => {
+        const u = doc.data();
+        if(u.uid !== auth.currentUser.uid && !myData.likes.includes(u.uid)) {
+            discoverUsers.push(u);
+        }
+    });
+    renderStack();
+}
+
+function renderStack() {
+    const stack = document.getElementById('swipe-stack');
+    stack.innerHTML = '';
+    const slice = discoverUsers.slice(currentIdx, currentIdx + 1);
+    if(slice.length === 0) {
+        stack.innerHTML = '<p style="text-align:center; padding:50px;">No one new nearby. Try again later!</p>';
+        return;
+    }
+    const user = slice[0];
+    const card = document.createElement('div');
+    card.className = 'swipe-card';
+    card.innerHTML = `<img src="${user.photoURL}" class="card-img"><div class="card-info"><h2>${user.name}, ${user.age}</h2></div>`;
+    stack.appendChild(card);
+}
+
+async function swipe(dir) {
+    if(discoverUsers.length === 0) return;
+    const target = discoverUsers[currentIdx];
+    const card = document.querySelector('.swipe-card');
+    if(!card) return;
+
+    card.style.transform = `translateX(${dir === 'left' ? -500 : 500}px) rotate(${dir === 'left' ? -30 : 30}deg)`;
+    card.style.opacity = '0';
+
+    if(dir === 'right') {
+        await db.collection('users').doc(auth.currentUser.uid).update({
+            likes: firebase.firestore.FieldValue.arrayUnion(target.uid)
+        });
+        // Mutual Match Check
+        if(target.likes && target.likes.includes(auth.currentUser.uid)) {
+            handleMatch(target);
+        }
+    }
+
+    currentIdx++;
+    setTimeout(renderStack, 500);
+}
+
+async function handleMatch(other) {
+    await db.collection('users').doc(auth.currentUser.uid).update({ matches: firebase.firestore.FieldValue.arrayUnion(other.uid) });
+    await db.collection('users').doc(other.uid).update({ matches: firebase.firestore.FieldValue.arrayUnion(auth.currentUser.uid) });
+    
+    document.getElementById('p1-match').innerHTML = `<img src="${myData.photoURL}" style="width:100%; height:100%; object-fit:cover;">`;
+    document.getElementById('p2-match').innerHTML = `<img src="${other.photoURL}" style="width:100%; height:100%; object-fit:cover;">`;
+    document.getElementById('match-popup').style.display = 'flex';
+}
+
+async function renderMatches() {
+    const list = document.getElementById('matches-list');
+    list.innerHTML = 'Loading...';
+    const userDoc = await db.collection('users').doc(auth.currentUser.uid).get();
+    const mIds = userDoc.data().matches || [];
+    list.innerHTML = '';
+    
+    for(let id of mIds) {
+        const u = (await db.collection('users').doc(id).get()).data();
+        const div = document.createElement('div');
+        div.style = "background:var(--glass); padding:10px; border-radius:12px; display:flex; align-items:center; gap:10px; cursor:pointer;";
+        div.onclick = () => openChat(u);
+        div.innerHTML = `<img src="${u.photoURL}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;"> <b>${u.name}</b>`;
+        list.appendChild(div);
+    }
+}
+
+let activeChatId = null;
+let unsubscribeChat = null;
+
+function openChat(user) {
+    const myId = auth.currentUser.uid;
+    activeChatId = myId < user.uid ? `${myId}_${user.uid}` : `${user.uid}_${myId}`;
+    document.getElementById('chat-user-name').innerText = user.name;
+    showPage('chat');
+    listenChat();
+}
+
+function listenChat() {
+    if(unsubscribeChat) unsubscribeChat();
+    const box = document.getElementById('chat-messages');
+    box.innerHTML = '';
+    unsubscribeChat = db.collection('chats').doc(activeChatId).collection('messages').orderBy('ts','asc').onSnapshot(snap => {
+        snap.docChanges().forEach(change => {
+            if(change.type === 'added') {
+                const d = change.doc.data();
+                const div = document.createElement('div');
+                div.className = `msg ${d.sender === auth.currentUser.uid ? 'sent' : 'received'}`;
+                div.innerText = d.text;
+                box.appendChild(div);
+                box.scrollTop = box.scrollHeight;
+            }
+        });
+    });
+}
+
+async function sendMessage() {
+    const input = document.getElementById('chat-input');
+    if(!input.value) return;
+    const text = input.value;
+    input.value = '';
+    await db.collection('chats').doc(activeChatId).collection('messages').add({
+        text, sender: auth.currentUser.uid, ts: firebase.firestore.FieldValue.serverTimestamp()
+    });
+}
+
+function renderProfile() {
+    document.getElementById('my-prof-img').innerHTML = `<img src="${myData.photoURL}" style="width:100%; height:100%; object-fit:cover;">`;
+    document.getElementById('my-prof-name').innerText = myData.name;
+}
+
+function previewImg(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = e => document.getElementById('pfp-preview').innerHTML = `<img src="${e.target.result}" style="width:100%; height:100%; object-fit:cover;">`;
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+</script>
+</body>
+</html>
