@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AURA — Find Your Frequency</title>
+
+<!-- Firebase SDKs (Compat version) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+/* ... Keeping your previous CSS styles ... */
+:root { --bg: #090b12; --bg2: #0f1220; --p1: #7c5cfc; --p2: #4f8ef7; --accent: #fc5c9c; --text: #f0f2ff; --text2: #8b93b8; --glass: rgba(255,255,255,0.08); }
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; overflow: hidden; height: 100vh; }
+#app { max-width: 430px; margin: 0 auto; height: 100vh; position: relative; background: var(--bg); display: flex; flex-direction: column; border-left: 1px solid rgba(255,255,255,0.1); border-right: 1px solid rgba(255,255,255,0.1); }
+.page { position: absolute; inset: 0; padding: 20px; display: none; flex-direction: column; background: var(--bg); z-index: 10; }
+.page.active { display: flex; }
+.grad-text { background: linear-gradient(135deg, var(--p1), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.btn { width: 100%; padding: 16px; border-radius: 16px; border: none; font-weight: 700; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.btn-primary { background: linear-gradient(135deg, var(--p1), var(--p2)); color: white; }
+.btn-ghost { background: var(--glass); color: white; margin-top: 10px; }
+.input { width: 100%; background: var(--glass); border: 1px solid rgba(255,255,255,0.1); padding: 15px; border-radius: 12px; color: white; margin-bottom: 15px; outline: none; }
+#loading-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
+#loading-overlay.hidden { opacity: 0; pointer-events: none; }
+.spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--p1); border-radius: 50%; animation: spin 1s linear infinite; margin-top: 20px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Match Popup */
+#match-popup { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 10000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; }
+
+/* Chat Box Styles */
+#chat-box { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 10px 0; }
+.msg { max-width: 80%; padding: 12px; border-radius: 18px; font-size: 14px; }
+.msg.sent { align-self: flex-end; background: var(--p1); color: white; border-bottom-right-radius: 4px; }
+.msg.received { align-self: flex-start; background: var(--glass); color: white; border-bottom-left-radius: 4px; }
+
+nav { height: 70px; background: rgba(9,11,18,0.95); display: none; justify-content: space-around; align-items: center; border-top: 1px solid rgba(255,255,255,0.1); }
+nav.visible { display: flex; }
+</style>
+</head>
+<body>
+
+<div id="app">
+    <!-- LOADING -->
+    <div id="loading-overlay">
+        <h1 class="grad-text" style="font-family:'Syne'; font-size:40px;">AURA</h1>
+        <div class="spinner"></div>
+        <p id="loading-status" style="margin-top:15px; font-size:12px; color:var(--text2);">Initializing Signal...</p>
+    </div>
+
+    <!-- PAGE: LANDING -->
+    <div id="page-landing" class="page">
+        <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+            <h1 class="grad-text" style="font-family:'Syne'; font-size:60px;">AURA</h1>
+            <p style="margin-bottom:40px; color:var(--text2); letter-spacing:3px;">FIND YOUR FREQUENCY</p>
+            <button class="btn btn-primary" onclick="showPage('auth')">Get Started</button>
+        </div>
+    </div>
+
+    <!-- PAGE: AUTH -->
+    <div id="page-auth" class="page">
+        <h2 style="margin-bottom:20px;">Join AURA</h2>
+        <input type="email" id="email" class="input" placeholder="Email">
+        <input type="password" id="password" class="input" placeholder="Password">
+        <button class="btn btn-primary" onclick="handleAuth()">Sign In / Register</button>
+        <button class="btn btn-ghost" onclick="showPage('landing')">Back</button>
+    </div>
+
+    <!-- PAGE: MATCHES -->
+    <div id="page-matches" class="page">
+        <h2 style="font-family:'Syne'; margin-bottom:20px;">Conversations</h2>
+        <div id="matches-list"></div>
+    </div>
+
+    <!-- PAGE: CHAT -->
+    <div id="page-chat" class="page">
+        <div style="display:flex; align-items:center; gap:15px; margin-bottom:10px;">
+            <button onclick="showPage('matches')" style="background:none; border:none; color:white; font-size:20px; cursor:pointer;">←</button>
+            <h3 id="chat-title">Chat</h3>
+        </div>
+        <div id="chat-box"></div>
+        <div style="display:flex; gap:10px; padding:10px 0;">
+            <input type="text" id="msg-input" class="input" style="margin:0;" placeholder="Message...">
+            <button class="btn btn-primary" style="width:auto;" onclick="sendMessage()">➤</button>
+        </div>
+    </div>
+
+    <!-- NAV -->
+    <nav id="navbar">
+        <div class="nav-item" onclick="showPage('matches')">💜</div>
+        <div class="nav-item" onclick="handleSignOut()">👤</div>
+    </nav>
+</div>
+
+<script>
+// --- CONFIG ---
+const firebaseConfig = {
+  apiKey: "AIzaSyDsc7eq6y-FmSp5QyNg9PTlg5ZVbUlU_Ok",
+  authDomain: "dating-f5c7f.firebaseapp.com",
+  projectId: "dating-f5c7f",
+  storageBucket: "dating-f5c7f.firebasestorage.app",
+  messagingSenderId: "1068091857220",
+  appId: "1:1068091857220:web:ff9a4fb6625f978bac1f11"
+};
+
+// --- INITIALIZATION ---
+let auth, db;
+try {
+    firebase.initializeApp(firebaseConfig);
+    auth = firebase.auth();
+    db = firebase.firestore();
+} catch (e) {
+    document.getElementById('loading-status').innerText = "Configuration Error. Check Console.";
+    console.error("Firebase Init Failed:", e);
+}
+
+// --- SAFETY TIMEOUT ---
+// If the auth state doesn't resolve in 5 seconds, hide the loader anyway
+setTimeout(() => {
+    const loader = document.getElementById('loading-overlay');
+    if (!loader.classList.contains('hidden')) {
+        console.warn("Auth state took too long. Check Authorized Domains in Firebase.");
+        loader.classList.add('hidden');
+        showPage('landing');
+    }
+}, 5000);
+
+// --- AUTH STATE ---
+auth.onAuthStateChanged(user => {
+    const loader = document.getElementById('loading-overlay');
+    loader.classList.add('hidden');
+    
+    if (user) {
+        showPage('matches');
+        renderMatches();
+    } else {
+        showPage('landing');
+    }
+});
+
+// --- NAVIGATION ---
+function showPage(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + id).classList.add('active');
+    
+    const navbar = document.getElementById('navbar');
+    navbar.classList.toggle('visible', id === 'matches');
+}
+
+// --- LOGIC ---
+async function handleAuth() {
+    const email = document.getElementById('email').value;
+    const pass = document.getElementById('password').value;
+    if (!email || !pass) return alert("Fill in details");
+
+    try {
+        await auth.signInWithEmailAndPassword(email, pass);
+    } catch (e) {
+        try {
+            await auth.createUserWithEmailAndPassword(email, pass);
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+}
+
+function handleSignOut() {
+    auth.signOut();
+}
+
+// Simple Mock Data for matches
+const MOCK_MATCHES = [{id: 'bot1', name: 'Sofia'}, {id: 'bot2', name: 'Jake'}];
+
+function renderMatches() {
+    const list = document.getElementById('matches-list');
+    list.innerHTML = MOCK_MATCHES.map(m => `
+        <div onclick="openChat('${m.id}', '${m.name}')" style="background:var(--glass); padding:20px; border-radius:15px; margin-bottom:10px; cursor:pointer;">
+            <b>${m.name}</b>
+        </div>
+    `).join('');
+}
+
+let activeChatId = null;
+let unsubscribe = null;
+
+function openChat(botId, name) {
+    const myId = auth.currentUser.uid;
+    activeChatId = myId < botId ? `${myId}_${botId}` : `${botId}_${myId}`;
+    document.getElementById('chat-title').innerText = name;
+    showPage('chat');
+    listenForMessages();
+}
+
+function listenForMessages() {
+    if (unsubscribe) unsubscribe();
+    const box = document.getElementById('chat-box');
+    box.innerHTML = '';
+
+    unsubscribe = db.collection('messages')
+        .where('chatId', '==', activeChatId)
+        .orderBy('timestamp', 'asc')
+        .onSnapshot(snap => {
+            snap.docChanges().forEach(change => {
+                if (change.type === 'added') {
+                    const d = change.doc.data();
+                    const div = document.createElement('div');
+                    div.className = `msg ${d.senderId === auth.currentUser.uid ? 'sent' : 'received'}`;
+                    div.innerText = d.text;
+                    box.appendChild(div);
+                    box.scrollTop = box.scrollHeight;
+                }
+            });
+        }, err => {
+            console.error("Chat Error:", err);
+            if(err.code === 'failed-precondition') alert("Building database index... Wait 1 min.");
+        });
+}
+
+async function sendMessage() {
+    const input = document.getElementById('msg-input');
+    const text = input.value;
+    if (!text) return;
+    input.value = '';
+
+    await db.collection('messages').add({
+        chatId: activeChatId,
+        senderId: auth.currentUser.uid,
+        text: text,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+}
+</script>
+</body>
+</html>
