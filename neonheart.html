@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NeonHeart - Futuristic Dating</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Inter', sans-serif; }
+  body { background: #000; color: #fff; overflow: hidden; }
+  #app { height: 100dvh; display: flex; flex-direction: column; }
+
+  /* Scrollable areas */
+  .scroll-area { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .scroll-area::-webkit-scrollbar { width: 0; }
+
+  /* Custom select */
+  select { background-image: none !important; }
+  select option { background: #111; color: #fff; }
+
+  /* Card drag */
+  .drag-card { touch-action: pan-y; cursor: grab; user-select: none; }
+  .drag-card:active { cursor: grabbing; }
+
+  /* Animations */
+  @keyframes pulse-ring {
+    0%,100%{transform:scale(1);opacity:.3}
+    50%{transform:scale(1.2);opacity:.6}
+  }
+  @keyframes bounce-heart { 0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)} }
+  @keyframes spin-loader { to{transform:rotate(360deg)} }
+  @keyframes fade-in { from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)} }
+  @keyframes slide-up { from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1} }
+  @keyframes slide-down { from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1} }
+  @keyframes wave { 0%,100%{height:8px}50%{height:36px} }
+  @keyframes blink { 0%,100%{opacity:0.2}50%{opacity:1} }
+
+  .anim-fade { animation: fade-in .4s ease forwards; }
+  .anim-slide-up { animation: slide-up .35s cubic-bezier(.34,1.56,.64,1) forwards; }
+  .anim-spin { animation: spin-loader .8s linear infinite; }
+  .anim-bounce { animation: bounce-heart 1s ease infinite; }
+  .anim-pulse { animation: pulse-ring 2s ease infinite; }
+  .wave-bar { animation: wave .6s ease-in-out infinite; }
+  .dot-blink { animation: blink 1.2s ease infinite; }
+
+  /* Glass morphism */
+  .glass { background: rgba(255,255,255,0.07); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
+  .glass-dark { background: rgba(0,0,0,0.6); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid rgba(255,255,255,0.08); }
+
+  /* Neon glow effects */
+  .glow-cyan { box-shadow: 0 0 20px rgba(6,182,212,.5); }
+  .glow-text-cyan { text-shadow: 0 0 20px rgba(6,182,212,.6); }
+  .glow-purple { box-shadow: 0 0 20px rgba(147,51,234,.5); }
+
+  /* Swipe card stacking */
+  .card-stack { position: relative; flex: 1; }
+  .swipe-card { position: absolute; inset: 0; border-radius: 24px; overflow: hidden; }
+  .swipe-card:nth-child(2) { transform: scale(.97) translateY(6px); z-index: 1; }
+  .swipe-card:nth-child(3) { transform: scale(.94) translateY(12px); z-index: 0; }
+  .swipe-card:first-child { z-index: 2; }
+
+  /* Stamp labels */
+  .stamp-like { position:absolute;top:32px;left:24px;border:4px solid #06b6d4;color:#06b6d4;padding:6px 16px;border-radius:10px;font-size:28px;font-weight:900;transform:rotate(-20deg);opacity:0;transition:opacity .15s;z-index:10;pointer-events:none; }
+  .stamp-nope { position:absolute;top:32px;right:24px;border:4px solid #f43f5e;color:#f43f5e;padding:6px 16px;border-radius:10px;font-size:28px;font-weight:900;transform:rotate(20deg);opacity:0;transition:opacity .15s;z-index:10;pointer-events:none; }
+
+  /* Input style */
+  .inp { width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:14px 20px;color:#fff;font-size:15px;outline:none;transition:border-color .2s; }
+  .inp::placeholder { color: rgba(255,255,255,.3); }
+  .inp:focus { border-color: #06b6d4; }
+
+  /* Typing dots */
+  .typing-dot { width:6px;height:6px;background:rgba(255,255,255,.4);border-radius:50%;display:inline-block;margin:0 2px; }
+  .typing-dot:nth-child(1){animation:blink 1.2s ease infinite 0s}
+  .typing-dot:nth-child(2){animation:blink 1.2s ease infinite .2s}
+  .typing-dot:nth-child(3){animation:blink 1.2s ease infinite .4s}
+
+  .line-clamp-2 { display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden; }
+  .line-clamp-3 { display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden; }
+
+  /* Page transitions */
+  .view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .view.active { display: flex; }
+
+  /* Modal overlay */
+  .modal { position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center; }
+  .modal.open { display:flex; }
+
+  /* Bottom nav active */
+  .nav-btn.active svg { fill: rgba(6,182,212,.2); }
+  .nav-btn.active { color: #06b6d4; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- BG Glows -->
+  <div style="position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0;">
+    <div style="position:absolute;top:-10%;left:-10%;width:40%;height:40%;background:rgba(88,28,135,.18);filter:blur(100px);border-radius:50%;"></div>
+    <div style="position:absolute;bottom:-10%;right:-10%;width:40%;height:40%;background:rgba(8,145,178,.15);filter:blur(100px);border-radius:50%;"></div>
+  </div>
+
+  <!-- Main container -->
+  <div style="position:relative;z-index:1;max-width:430px;width:100%;margin:0 auto;flex:1;display:flex;flex-direction:column;overflow:hidden;">
+
+    <!-- ████ LOADER ████ -->
+    <div id="loader" style="position:fixed;inset:0;background:#000;z-index:200;display:flex;align-items:center;justify-content:center;">
+      <div style="width:48px;height:48px;border:3px solid rgba(6,182,212,.2);border-top-color:#06b6d4;border-radius:50%;" class="anim-spin"></div>
+    </div>
+
+    <!-- ████ TOAST ████ -->
+    <div id="toast" style="position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-80px);background:#111;border:1px solid rgba(255,255,255,.15);border-radius:100px;padding:10px 22px;font-size:14px;z-index:999;transition:transform .4s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;pointer-events:none;"></div>
+
+    <!-- ████ LANDING VIEW ████ -->
+    <div id="view-landing" class="view active scroll-area" style="align-items:center;justify-content:center;padding:40px 28px;text-align:center;">
+      <div class="anim-fade">
+        <div style="width:96px;height:96px;background:linear-gradient(135deg,#06b6d4,#9333ea);border-radius:28px;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;box-shadow:0 0 40px rgba(6,182,212,.4);">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="white"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+        </div>
+        <h1 style="font-size:44px;font-weight:900;letter-spacing:-2px;background:linear-gradient(135deg,#22d3ee,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px;">NEON HEART</h1>
+        <p style="color:rgba(255,255,255,.5);font-size:16px;max-width:260px;margin:0 auto 48px;line-height:1.6;">Find your futuristic match in the neon glow of the digital age.</p>
+        <div style="display:flex;flex-direction:column;gap:14px;width:100%;max-width:320px;margin:0 auto;">
+          <button class="btn-primary" onclick="showAuth('signup')">Create Account</button>
+          <button class="btn-outline" onclick="showAuth('login')">Sign In</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ████ AUTH VIEW ████ -->
+    <div id="view-auth" class="view scroll-area" style="padding:32px 28px;">
+      <button onclick="showView('landing')" style="color:rgba(255,255,255,.5);display:flex;align-items:center;gap:6px;margin-bottom:28px;font-size:14px;background:none;border:none;cursor:pointer;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Back
+      </button>
+      <h2 id="auth-title" style="font-size:30px;font-weight:800;margin-bottom:28px;">Welcome Back</h2>
+      <div id="auth-error" style="display:none;padding:12px 16px;background:rgba(244,63,94,.12);border:1px solid rgba(244,63,94,.25);border-radius:12px;color:#f43f5e;font-size:13px;margin-bottom:16px;"></div>
+      <form id="auth-form" onsubmit="handleAuth(event)" style="display:flex;flex-direction:column;gap:18px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:8px;">Email Address</label>
+          <input name="email" type="email" required class="inp" placeholder="name@example.com" autocomplete="email">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:8px;">Password</label>
+          <input name="password" type="password" required class="inp" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button type="submit" id="auth-submit" class="btn-primary" style="margin-top:8px;">Sign In</button>
+      </form>
+      <p style="text-align:center;color:rgba(255,255,255,.4);margin-top:24px;font-size:14px;">
+        <span id="auth-switch-text">Don't have an account?</span>
+        <button id="auth-switch-btn" onclick="toggleAuthMode()" style="color:#22d3ee;font-weight:700;background:none;border:none;cursor:pointer;margin-left:6px;">Sign Up</button>
+      </p>
+    </div>
+
+    <!-- ████ PROFILE SETUP VIEW ████ -->
+    <div id="view-profile" class="view scroll-area" style="padding:32px 28px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
+        <h2 style="font-size:28px;font-weight:800;">Profile Setup</h2>
+        <span id="setup-step-label" style="color:#06b6d4;font-family:monospace;font-size:14px;">Step 1/3</span>
+      </div>
+
+      <!-- Step 1: Basic info -->
+      <div id="step-1" style="display:flex;flex-direction:column;gap:20px;">
+        <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:8px;">
+          <div style="position:relative;" onclick="document.getElementById('photo-input').click()">
+            <div id="avatar-preview" style="width:120px;height:120px;border-radius:50%;border:2px solid rgba(6,182,212,.5);background:rgba(255,255,255,.05);overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0112 0v2"/></svg>
+            </div>
+            <div style="position:absolute;bottom:2px;right:2px;width:34px;height:34px;background:#06b6d4;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 12px rgba(6,182,212,.5);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            </div>
+            <input type="file" id="photo-input" accept="image/*" style="display:none;" onchange="handlePhotoUpload(this)">
+          </div>
+          <p style="color:rgba(255,255,255,.35);font-size:12px;margin-top:10px;">Upload your avatar</p>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:8px;">Display Name</label>
+          <input id="s-name" class="inp" placeholder="Your name">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:8px;">Age</label>
+            <input id="s-age" type="number" min="18" max="99" class="inp" placeholder="25">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:8px;">Gender</label>
+            <select id="s-gender" class="inp" style="appearance:none;">
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="non-binary">Non-Binary</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Bio + Location -->
+      <div id="step-2" style="display:none;flex-direction:column;gap:20px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:8px;">Your Bio</label>
+          <textarea id="s-bio" class="inp" rows="5" placeholder="Tell the future about yourself..." style="resize:none;"></textarea>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:8px;">Location</label>
+          <input id="s-location" class="inp" placeholder="Neo Tokyo, Night City...">
+        </div>
+      </div>
+
+      <!-- Step 3: Interests -->
+      <div id="step-3" style="display:none;">
+        <p style="color:rgba(255,255,255,.5);font-size:14px;margin-bottom:20px;">Select your interests to find better matches</p>
+        <div id="interests-grid" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-top:32px;">
+        <button id="setup-back-btn" onclick="setupPrev()" class="btn-outline" style="flex:1;display:none;">Back</button>
+        <button id="setup-next-btn" onclick="setupNext()" class="btn-primary" style="flex:1;">Continue</button>
+      </div>
+    </div>
+
+    <!-- ████ DASHBOARD VIEW ████ -->
+    <div id="view-dashboard" class="view" style="padding:0;">
+      <header style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="#06b6d4"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+          <span style="font-size:18px;font-weight:900;letter-spacing:-.5px;">NEON</span>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="handleSignOut()" style="width:38px;height:38px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:50%;color:rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Card stack area -->
+      <div style="flex:1;padding:0 16px;display:flex;flex-direction:column;overflow:hidden;">
+        <div class="card-stack" id="card-stack">
+          <!-- Cards rendered by JS -->
+        </div>
+        <!-- No more profiles state -->
+        <div id="no-profiles" style="display:none;flex:1;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px;">
+          <div style="width:80px;height:80px;background:rgba(255,255,255,.04);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0112 0v2"/></svg>
+          </div>
+          <h3 style="font-size:22px;font-weight:700;margin-bottom:8px;">No more profiles</h3>
+          <p style="color:rgba(255,255,255,.4);font-size:14px;margin-bottom:24px;">Check back later for new matches!</p>
+          <button class="btn-outline" onclick="reloadFeed()">Refresh Feed</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ████ MATCHES VIEW ████ -->
+    <div id="view-matches" class="view" style="padding:0;">
+      <div style="padding:20px 24px 12px;">
+        <h2 style="font-size:28px;font-weight:800;">Your Matches</h2>
+      </div>
+      <div id="matches-list" class="scroll-area" style="flex:1;padding:0 16px 16px;"></div>
+    </div>
+
+    <!-- ████ CHAT VIEW ████ -->
+    <div id="view-chat" class="view" style="padding:0;">
+      <!-- Chat header -->
+      <div class="glass-dark" style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button onclick="showView('matches')" style="width:34px;height:34px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:50%;color:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div style="position:relative;">
+            <div id="chat-avatar" style="width:40px;height:40px;border-radius:50%;overflow:hidden;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;"></div>
+            <div id="chat-online-dot" style="position:absolute;bottom:1px;right:1px;width:10px;height:10px;border-radius:50%;border:2px solid #000;background:#6b7280;"></div>
+          </div>
+          <div>
+            <p id="chat-name" style="font-weight:700;font-size:15px;line-height:1.2;"></p>
+            <p id="chat-status" style="font-size:11px;color:#6b7280;margin-top:2px;"></p>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="startCall()" style="width:36px;height:36px;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.2);border-radius:50%;color:#06b6d4;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8a19.79 19.79 0 01-3.07-8.68A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.72 6.72l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Messages -->
+      <div id="messages-area" class="scroll-area" style="flex:1;padding:16px;display:flex;flex-direction:column;gap:12px;"></div>
+
+      <!-- Typing indicator -->
+      <div id="typing-indicator" style="display:none;padding:4px 20px 4px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div id="typing-avatar" style="width:24px;height:24px;border-radius:50%;overflow:hidden;background:rgba(255,255,255,.08);flex-shrink:0;"></div>
+          <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:16px 16px 16px 4px;padding:10px 14px;display:flex;gap:4px;align-items:center;">
+            <div class="typing-dot dot-blink"></div>
+            <div class="typing-dot dot-blink"></div>
+            <div class="typing-dot dot-blink"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input area -->
+      <div class="glass-dark" style="padding:12px 16px;flex-shrink:0;">
+        <form id="chat-form" onsubmit="sendMessage(event)" style="display:flex;align-items:center;gap:10px;">
+          <button type="button" id="mic-btn" onclick="toggleRecording()" style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .2s;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+          </button>
+          <input id="msg-input" class="inp" placeholder="Type a message..." autocomplete="off" oninput="handleTypingInput()" style="flex:1;padding:12px 18px;">
+          <button type="submit" style="width:42px;height:42px;background:#06b6d4;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;" class="glow-cyan">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ████ BOTTOM NAV ████ -->
+    <nav id="bottom-nav" style="display:none;background:rgba(0,0,0,.85);border-top:1px solid rgba(255,255,255,.08);padding:8px 0;flex-shrink:0;">
+      <div style="display:flex;justify-content:space-around;">
+        <button class="nav-btn" id="nav-home" onclick="navTo('dashboard')" style="padding:10px 28px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.4);display:flex;flex-direction:column;align-items:center;gap:3px;transition:color .2s;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span style="font-size:10px;font-weight:600;">Discover</span>
+        </button>
+        <button class="nav-btn" id="nav-matches" onclick="navTo('matches')" style="padding:10px 28px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.4);display:flex;flex-direction:column;align-items:center;gap:3px;transition:color .2s;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <span style="font-size:10px;font-weight:600;">Matches</span>
+        </button>
+        <button class="nav-btn" id="nav-profile" onclick="navTo('profile')" style="padding:10px 28px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.4);display:flex;flex-direction:column;align-items:center;gap:3px;transition:color .2s;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0112 0v2"/></svg>
+          <span style="font-size:10px;font-weight:600;">Profile</span>
+        </button>
+      </div>
+    </nav>
+
+  </div><!-- /max-w container -->
+</div><!-- /#app -->
+
+<!-- ████ MATCH MODAL ████ -->
+<div class="modal" id="match-modal" style="background:rgba(0,0,0,.92);z-index:150;flex-direction:column;padding:48px 32px;text-align:center;">
+  <div style="position:relative;margin-bottom:36px;">
+    <div style="position:absolute;inset:0;background:#06b6d4;filter:blur(60px);opacity:.25;border-radius:50%;" class="anim-pulse"></div>
+    <div style="display:flex;align-items:center;gap:20px;position:relative;z-index:1;justify-content:center;">
+      <div id="match-my-photo" style="width:96px;height:96px;border-radius:50%;border:4px solid #06b6d4;overflow:hidden;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;"></div>
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="#f43f5e" class="anim-bounce"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+      <div id="match-their-photo" style="width:96px;height:96px;border-radius:50%;border:4px solid #06b6d4;overflow:hidden;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;"></div>
+    </div>
+  </div>
+  <h2 style="font-size:44px;font-weight:900;letter-spacing:-2px;background:linear-gradient(135deg,#22d3ee,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-style:italic;margin-bottom:12px;">IT'S A MATCH!</h2>
+  <p style="color:rgba(255,255,255,.5);font-size:16px;margin-bottom:40px;">You and <span id="match-name" style="color:#fff;font-weight:700;"></span> have connected in the neon glow.</p>
+  <div style="display:flex;flex-direction:column;gap:14px;width:100%;max-width:280px;margin:0 auto;">
+    <button class="btn-primary" onclick="openMatchChat()">Send a Message</button>
+    <button onclick="closeModal('match-modal')" style="color:rgba(255,255,255,.4);background:none;border:none;cursor:pointer;padding:10px;font-size:14px;">Keep Swiping</button>
+  </div>
+</div>
+
+<!-- ████ CALL MODAL ████ -->
+<div class="modal" id="call-modal" style="background:rgba(0,0,0,.97);z-index:160;flex-direction:column;align-items:center;justify-content:space-between;padding:60px 32px;">
+  <div style="text-align:center;">
+    <div style="position:relative;display:inline-block;margin-bottom:24px;">
+      <div style="position:absolute;inset:0;background:#06b6d4;filter:blur(40px);opacity:.3;border-radius:50%;" class="anim-pulse"></div>
+      <div id="call-photo" style="width:160px;height:160px;border-radius:50%;border:4px solid #06b6d4;overflow:hidden;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;position:relative;z-index:1;"></div>
+    </div>
+    <h2 id="call-name" style="font-size:28px;font-weight:800;margin-bottom:8px;"></h2>
+    <p style="color:#06b6d4;font-family:monospace;font-size:13px;" class="anim-pulse">Establishing Secure Connection...</p>
+  </div>
+
+  <div style="display:flex;gap:6px;align-items:flex-end;height:48px;">
+    <script>/* wave bars rendered by JS */</script>
+  </div>
+
+  <div style="text-align:center;">
+    <div style="display:flex;gap:20px;margin-bottom:32px;">
+      <button style="width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+      </button>
+      <button style="width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+      </button>
+      <button onclick="endCall()" style="width:64px;height:64px;border-radius:50%;background:#f43f5e;border:none;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 003.41 2.6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.42 19.42 0 013.07 10.8a19.79 19.79 0 01-3.07-8.68A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.91"/><line x1="23" y1="1" x2="1" y2="23"/></svg>
+      </button>
+    </div>
+    <p style="color:rgba(255,255,255,.25);font-family:monospace;font-size:11px;">ENCRYPTED END-TO-END • NEONHEART SECURE</p>
+  </div>
+</div>
+
+<!-- BUTTON STYLES -->
+<style>
+.btn-primary{width:100%;padding:16px;background:#06b6d4;color:#000;font-weight:800;font-size:15px;border:none;border-radius:100px;cursor:pointer;transition:transform .2s,box-shadow .2s;box-shadow:0 0 20px rgba(6,182,212,.4);}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 0 30px rgba(6,182,212,.6);}
+.btn-primary:active{transform:scale(.97);}
+.btn-outline{width:100%;padding:16px;background:transparent;color:#fff;font-weight:700;font-size:15px;border:1px solid rgba(255,255,255,.2);border-radius:100px;cursor:pointer;transition:background .2s;}
+.btn-outline:hover{background:rgba(255,255,255,.08);}
+.btn-outline:active{transform:scale(.97);}
+</style>
+
+<script>
+/* ════════════════════════════════════════
+   FIREBASE INIT
+════════════════════════════════════════ */
+firebase.initializeApp({
+  apiKey:"AIzaSyDsc7eq6y-FmSp5QyNg9PTlg5ZVbUlU_Ok",
+  authDomain:"dating-f5c7f.firebaseapp.com",
+  projectId:"dating-f5c7f",
+  storageBucket:"dating-f5c7f.firebasestorage.app",
+  messagingSenderId:"1068091857220",
+  appId:"1:1068091857220:web:ff9a4fb6625f978bac1f11"
+});
+const auth = firebase.auth();
+const db   = firebase.firestore();
+const stor = firebase.storage();
+const FieldValue = firebase.firestore.FieldValue;
+
+/* ════════════════════════════════════════
+   STATE
+════════════════════════════════════════ */
+let CU = null;        // firebase user
+let CUD = null;       // user doc
+let feed = [];
+let feedIdx = 0;
+let matches = [];
+let activeMatch = null;
+let activeMsgs = [];
+let isRecording = false;
+let mediaRecorder = null;
+let typingTimer = null;
+let unsubMessages = null;
+let unsubTyping = null;
+let unsubMatches = null;
+let authMode = 'login';
+let setupStep = 1;
+let photoURL = '';
+let pendingMatchUser = null;
+
+const INTERESTS = ["Music","Fitness","Travel","Gaming","Art","Cooking","Tech","Movies","Outdoors","Photography","Reading","Dancing"];
+let selectedInterests = [];
+
+/* ════════════════════════════════════════
+   NAVIGATION
+════════════════════════════════════════ */
+const MAIN_VIEWS = ['dashboard','matches','chat'];
+
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const el = document.getElementById('view-'+name);
+  if(el) el.classList.add('active');
+
+  // Bottom nav
+  const nav = document.getElementById('bottom-nav');
+  const showNav = MAIN_VIEWS.includes(name) && name !== 'chat';
+  nav.style.display = showNav ? 'block' : 'none';
+
+  // Nav active state
+  ['home','matches','profile'].forEach(n=>document.getElementById('nav-'+n)?.classList.remove('active'));
+  if(name==='dashboard') document.getElementById('nav-home')?.classList.add('active');
+  if(name==='matches') document.getElementById('nav-matches')?.classList.add('active');
+  if(name==='profile') document.getElementById('nav-profile')?.classList.add('active');
+}
+
+function navTo(page) {
+  if(!CU){showToast('Please sign in first.');return;}
+  if(page==='matches') loadMatches();
+  showView(page);
+}
+
+/* ════════════════════════════════════════
+   TOAST
+════════════════════════════════════════ */
+let toastTimer;
+function showToast(msg, ms=2800) {
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.style.transform='translateX(-50%) translateY(0)';
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.style.transform='translateX(-50%) translateY(-80px)',ms);
+}
+
+/* ════════════════════════════════════════
+   MODAL
+════════════════════════════════════════ */
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+/* ════════════════════════════════════════
+   AUTH
+════════════════════════════════════════ */
+firebase.auth().onAuthStateChanged(async (user) => {
+  const loader = document.getElementById('loader');
+  if(user) {
+    CU = user;
+    try {
+      const snap = await db.collection('users').doc(user.uid).get();
+      if(snap.exists) {
+        CUD = snap.data();
+        updateOnlineStatus(true);
+        await loadFeed();
+        showView('dashboard');
+        document.getElementById('bottom-nav').style.display='block';
+      } else {
+        showView('profile');
+        renderInterestsGrid();
+      }
+    } catch(e) {
+      showView('profile');
+      renderInterestsGrid();
+    }
+  } else {
+    CU=null; CUD=null;
+    showView('landing');
+  }
+  loader.style.display='none';
+});
+
+function showAuth(mode) {
+  authMode = mode;
+  document.getElementById('auth-title').textContent = mode==='login' ? 'Welcome Back' : 'Join the Future';
+  document.getElementById('auth-submit').textContent = mode==='login' ? 'Sign In' : 'Sign Up';
+  document.getElementById('auth-switch-text').textContent = mode==='login' ? "Don't have an account?" : "Already have an account?";
+  document.getElementById('auth-switch-btn').textContent = mode==='login' ? 'Sign Up' : 'Sign In';
+  document.getElementById('auth-error').style.display='none';
+  showView('auth');
+}
+
+function toggleAuthMode() {
+  showAuth(authMode==='login' ? 'signup' : 'login');
+}
+
+async function handleAuth(e) {
+  e.preventDefault();
+  const email = e.target.email.value;
+  const pass  = e.target.password.value;
+  const errEl = document.getElementById('auth-error');
+  errEl.style.display='none';
+  const btn = document.getElementById('auth-submit');
+  btn.textContent='...'; btn.disabled=true;
+  try {
+    if(authMode==='login') await auth.signInWithEmailAndPassword(email, pass);
+    else                   await auth.createUserWithEmailAndPassword(email, pass);
+  } catch(err) {
+    errEl.textContent = friendlyAuthErr(err.code);
+    errEl.style.display='block';
+    btn.textContent = authMode==='login' ? 'Sign In' : 'Sign Up';
+    btn.disabled=false;
+  }
+}
+
+async function handleSignOut() {
+  updateOnlineStatus(false);
+  await auth.signOut();
+  CU=null; CUD=null; feed=[]; feedIdx=0;
+  document.getElementById('bottom-nav').style.display='none';
+  showView('landing');
+  showToast('Signed out 👋');
+}
+
+function friendlyAuthErr(code) {
+  const m = {
+    'auth/user-not-found':'No account found with that email.',
+    'auth/wrong-password':'Incorrect password.',
+    'auth/email-already-in-use':'That email is already in use.',
+    'auth/weak-password':'Password must be at least 6 characters.',
+    'auth/invalid-email':'Please enter a valid email.',
+    'auth/invalid-credential':'Invalid email or password.',
+    'auth/network-request-failed':'Network error. Check your connection.'
+  };
+  return m[code] || 'Something went wrong. Please try again.';
+}
+
+/* ════════════════════════════════════════
+   ONLINE STATUS
+════════════════════════════════════════ */
+async function updateOnlineStatus(online) {
+  if(!CU) return;
+  try {
+    await db.collection('users').doc(CU.uid).update({
+      online,
+      lastSeen: FieldValue.serverTimestamp()
+    });
+  } catch(e) {}
+}
+
+window.addEventListener('visibilitychange', ()=>{
+  if(CU) updateOnlineStatus(document.visibilityState==='visible');
+});
+window.addEventListener('beforeunload', ()=>{ if(CU) updateOnlineStatus(false); });
+
+/* ════════════════════════════════════════
+   PROFILE SETUP
+════════════════════════════════════════ */
+function renderInterestsGrid() {
+  const grid = document.getElementById('interests-grid');
+  if(!grid) return;
+  grid.innerHTML = INTERESTS.map(i=>`
+    <button onclick="toggleInterest('${i}',this)"
+      style="padding:9px 18px;border-radius:100px;font-size:13px;font-weight:500;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:rgba(255,255,255,.7);cursor:pointer;transition:all .2s;"
+      data-interest="${i}">${i}</button>
+  `).join('');
+}
+
+function toggleInterest(name, btn) {
+  const idx = selectedInterests.indexOf(name);
+  if(idx>=0) {
+    selectedInterests.splice(idx,1);
+    btn.style.background='rgba(255,255,255,.05)';
+    btn.style.borderColor='rgba(255,255,255,.12)';
+    btn.style.color='rgba(255,255,255,.7)';
+  } else {
+    selectedInterests.push(name);
+    btn.style.background='#06b6d4';
+    btn.style.borderColor='#06b6d4';
+    btn.style.color='#000';
+    btn.style.boxShadow='0 0 12px rgba(6,182,212,.35)';
+  }
+}
+
+async function handlePhotoUpload(input) {
+  if(!input.files||!input.files[0]) return;
+  const file = input.files[0];
+  const preview = document.getElementById('avatar-preview');
+  preview.innerHTML = '';
+  // Show local preview immediately
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.createElement('img');
+    img.src = e.target.result;
+    img.style.cssText='width:100%;height:100%;object-fit:cover;';
+    preview.appendChild(img);
+    photoURL = e.target.result; // fallback
+  };
+  reader.readAsDataURL(file);
+  // Upload to storage
+  try {
+    const ref = stor.ref('profiles/'+ CU.uid);
+    await ref.put(file);
+    photoURL = await ref.getDownloadURL();
+  } catch(e) { /* Storage may need rules, keep local preview */ }
+}
+
+async function setupNext() {
+  if(setupStep===1) {
+    const name=document.getElementById('s-name').value.trim();
+    const age=parseInt(document.getElementById('s-age').value);
+    if(!name) return showToast('Enter your display name.');
+    if(!age||age<18||age>99) return showToast('Enter a valid age (18+).');
+    document.getElementById('step-1').style.display='none';
+    document.getElementById('step-2').style.display='flex';
+    setupStep=2;
+    document.getElementById('setup-step-label').textContent='Step 2/3';
+    document.getElementById('setup-back-btn').style.display='block';
+  } else if(setupStep===2) {
+    document.getElementById('step-2').style.display='none';
+    document.getElementById('step-3').style.display='block';
+    setupStep=3;
+    document.getElementById('setup-step-label').textContent='Step 3/3';
+    document.getElementById('setup-next-btn').textContent='Launch Profile 🚀';
+  } else {
+    // Save profile
+    const data = {
+      uid: CU.uid,
+      displayName: document.getElementById('s-name').value.trim(),
+      age: parseInt(document.getElementById('s-age').value),
+      gender: document.getElementById('s-gender').value,
+      bio: document.getElementById('s-bio').value.trim() || 'New to NeonHeart!',
+      location: document.getElementById('s-location').value.trim() || 'The Grid',
+      interests: selectedInterests,
+      photoURL: photoURL || `https://picsum.photos/seed/${CU.uid}/400/600`,
+      online: true,
+      lastSeen: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      blockedUsers: []
+    };
+    try {
+      await db.collection('users').doc(CU.uid).set(data);
+      CUD = data;
+      await loadFeed();
+      showView('dashboard');
+      document.getElementById('bottom-nav').style.display='block';
+      showToast('Profile created! 🎉');
+    } catch(e) {
+      showToast('Failed to save profile. Check Firestore rules.');
+      console.error(e);
+    }
+  }
+}
+
+function setupPrev() {
+  if(setupStep===2) {
+    document.getElementById('step-2').style.display='none';
+    document.getElementById('step-1').style.display='flex';
+    setupStep=1;
+    document.getElementById('setup-step-label').textContent='Step 1/3';
+    document.getElementById('setup-back-btn').style.display='none';
+    document.getElementById('setup-next-btn').textContent='Continue';
+  } else if(setupStep===3) {
+    document.getElementById('step-3').style.display='none';
+    document.getElementById('step-2').style.display='flex';
+    setupStep=2;
+    document.getElementById('setup-step-label').textContent='Step 2/3';
+    document.getElementById('setup-next-btn').textContent='Continue';
+  }
+}
+
+/* ════════════════════════════════════════
+   FEED / SWIPE
+════════════════════════════════════════ */
+async function loadFeed() {
+  if(!CU||!CUD) return;
+  try {
+    const snap = await db.collection('users').limit(60).get();
+    const blocked = CUD.blockedUsers || [];
+    let users = snap.docs
+      .map(d=>({...d.data(),uid:d.id}))
+      .filter(u=>u.uid!==CU.uid && !blocked.includes(u.uid));
+
+    // Sort by interest overlap
+    if(CUD.interests?.length) {
+      users.sort((a,b)=>{
+        const oa=(a.interests||[]).filter(i=>CUD.interests.includes(i)).length;
+        const ob=(b.interests||[]).filter(i=>CUD.interests.includes(i)).length;
+        return ob-oa;
+      });
+    }
+    feed=users; feedIdx=0;
+    renderCards();
+  } catch(e) { console.error('Feed error:',e); }
+}
+
+async function reloadFeed() {
+  feedIdx=0;
+  await loadFeed();
+}
+
+function renderCards() {
+  const stack=document.getElementById('card-stack');
+  const noMore=document.getElementById('no-profiles');
+  stack.innerHTML='';
+
+  if(feedIdx>=feed.length) {
+    stack.style.display='none';
+    noMore.style.display='flex';
+    return;
+  }
+
+  noMore.style.display='none';
+  stack.style.display='block';
+  stack.style.position='relative';
+  stack.style.flex='1';
+
+  // Render up to 3 stacked cards
+  for(let i=Math.min(feedIdx+2,feed.length-1);i>=feedIdx;i--) {
+    const u=feed[i];
+    const card=makeCard(u, i===feedIdx);
+    stack.appendChild(card);
+  }
+}
+
+function makeCard(user, isTop) {
+  const div=document.createElement('div');
+  div.className='swipe-card'+(isTop?' drag-card':'');
+  div.dataset.uid=user.uid;
+  div.style.cssText=`position:absolute;inset:0;border-radius:24px;overflow:hidden;background:#111;`;
+
+  const img=document.createElement('img');
+  img.src=user.photoURL||`https://picsum.photos/seed/${user.uid}/400/600`;
+  img.style.cssText='width:100%;height:100%;object-fit:cover;pointer-events:none;';
+  img.referrerPolicy='no-referrer';
+  div.appendChild(img);
+
+  // Gradient overlay
+  const grad=document.createElement('div');
+  grad.style.cssText='position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.9) 0%,rgba(0,0,0,.4) 40%,transparent 70%);';
+  div.appendChild(grad);
+
+  // LIKE stamp
+  const likeStamp=document.createElement('div');
+  likeStamp.className='stamp-like';
+  likeStamp.textContent='LIKE';
+  div.appendChild(likeStamp);
+
+  // NOPE stamp
+  const nopeStamp=document.createElement('div');
+  nopeStamp.className='stamp-nope';
+  nopeStamp.textContent='NOPE';
+  div.appendChild(nopeStamp);
+
+  // Card info
+  const info=document.createElement('div');
+  info.style.cssText='position:absolute;bottom:0;left:0;right:0;padding:24px;';
+
+  const tags=(user.interests||[]).slice(0,3).map(i=>`
+    <span style="padding:3px 10px;background:rgba(6,182,212,.15);border:1px solid rgba(6,182,212,.3);border-radius:100px;font-size:11px;color:#22d3ee;">${i}</span>
+  `).join('');
+
+  info.innerHTML=`
+    <h3 style="font-size:28px;font-weight:800;margin-bottom:4px;text-shadow:0 2px 8px rgba(0,0,0,.5);">${user.displayName||'?'}, ${user.age||'?'}</h3>
+    <p style="color:rgba(255,255,255,.65);font-size:13px;display:flex;align-items:center;gap:4px;margin-bottom:10px;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="#06b6d4"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+      ${user.location||'Unknown'}
+    </p>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">${tags}</div>
+    <p style="color:rgba(255,255,255,.55);font-size:13px;line-height:1.5;" class="line-clamp-2">${user.bio||''}</p>
+    <div style="display:flex;align-items:center;justify-content:center;gap:20px;margin-top:20px;">
+      <button onclick="event.stopPropagation();doSkip()" style="width:62px;height:62px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#f43f5e;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .2s;" onmouseover="this.style.background='#f43f5e';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,.08)';this.style.color='#f43f5e'">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <button onclick="event.stopPropagation();doLike()" style="width:76px;height:76px;border-radius:50%;background:#06b6d4;border:none;color:#000;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 24px rgba(6,182,212,.5);transition:transform .2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="#000"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+      </button>
+    </div>
+  `;
+  div.appendChild(info);
+
+  // Drag logic (only for top card)
+  if(isTop) {
+    let startX=0, startY=0, curX=0, dragging=false;
+
+    function dragStart(e) {
+      dragging=true;
+      const p=e.touches?e.touches[0]:e;
+      startX=p.clientX; startY=p.clientY;
+      div.style.transition='none';
+    }
+    function dragMove(e) {
+      if(!dragging) return;
+      const p=e.touches?e.touches[0]:e;
+      curX=p.clientX-startX;
+      const curY=p.clientY-startY;
+      const rot=curX*0.08;
+      div.style.transform=`translate(${curX}px,${curY*.3}px) rotate(${rot}deg)`;
+      likeStamp.style.opacity=Math.max(0,Math.min(1,curX/80));
+      nopeStamp.style.opacity=Math.max(0,Math.min(1,-curX/80));
+    }
+    function dragEnd() {
+      if(!dragging) return;
+      dragging=false;
+      if(curX>100)       { animateOut(div,'right'); doLike(); }
+      else if(curX<-100) { animateOut(div,'left'); doSkip(); }
+      else {
+        div.style.transition='transform .4s cubic-bezier(.34,1.56,.64,1)';
+        div.style.transform='';
+        likeStamp.style.opacity=0;
+        nopeStamp.style.opacity=0;
+      }
+      curX=0;
+      window.removeEventListener('mousemove',dragMove);
+      window.removeEventListener('mouseup',dragEnd);
+      window.removeEventListener('touchmove',dragMove);
+      window.removeEventListener('touchend',dragEnd);
+    }
+    div.addEventListener('mousedown',e=>{dragStart(e);window.addEventListener('mousemove',dragMove);window.addEventListener('mouseup',dragEnd);});
+    div.addEventListener('touchstart',e=>{dragStart(e);window.addEventListener('touchmove',dragMove,{passive:true});window.addEventListener('touchend',dragEnd);},{passive:true});
+  }
+
+  return div;
+}
+
+function animateOut(card, dir) {
+  card.style.transition='transform .4s ease,opacity .35s';
+  card.style.transform=`translate(${dir==='right'?150:-150}%,-10%) rotate(${dir==='right'?20:-20}deg)`;
+  card.style.opacity='0';
+  setTimeout(()=>card.remove(),400);
+}
+
+function doSkip() {
+  feedIdx++;
+  renderCards();
+}
+
+async function doLike() {
+  const user=feed[feedIdx];
+  if(!user||!CU) { feedIdx++; renderCards(); return; }
+
+  feedIdx++;
+  const path='likes';
+  const likeId=`${CU.uid}_${user.uid}`;
+  try {
+    await db.collection(path).doc(likeId).set({
+      fromUid:CU.uid, toUid:user.uid,
+      createdAt:FieldValue.serverTimestamp()
+    });
+    // Check mutual
+    const mutual=await db.collection(path).doc(`${user.uid}_${CU.uid}`).get();
+    if(mutual.exists) {
+      const matchId=[CU.uid,user.uid].sort().join('_');
+      await db.collection('matches').doc(matchId).set({
+        users:[CU.uid,user.uid],
+        createdAt:FieldValue.serverTimestamp()
+      });
+      pendingMatchUser=user;
+      showMatchModal(user);
+    }
+  } catch(e) { console.error('Like error:',e); }
+  renderCards();
+}
+
+/* ════════════════════════════════════════
+   MATCH MODAL
+════════════════════════════════════════ */
+function showMatchModal(otherUser) {
+  // My photo
+  const myPhoto=document.getElementById('match-my-photo');
+  myPhoto.innerHTML='';
+  if(CUD?.photoURL) {
+    const img=document.createElement('img');
+    img.src=CUD.photoURL; img.referrerPolicy='no-referrer';
+    img.style.cssText='width:100%;height:100%;object-fit:cover;';
+    myPhoto.appendChild(img);
+  }
+  // Their photo
+  const theirPhoto=document.getElementById('match-their-photo');
+  theirPhoto.innerHTML='';
+  if(otherUser?.photoURL) {
+    const img=document.createElement('img');
+    img.src=otherUser.photoURL; img.referrerPolicy='no-referrer';
+    img.style.cssText='width:100%;height:100%;object-fit:cover;';
+    theirPhoto.appendChild(img);
+  }
+  document.getElementById('match-name').textContent=otherUser?.displayName||'them';
+  openModal('match-modal');
+}
+
+function openMatchChat() {
+  closeModal('match-modal');
+  if(pendingMatchUser) {
+    const matchId=[CU.uid,pendingMatchUser.uid].sort().join('_');
+    const match={id:matchId,users:[CU.uid,pendingMatchUser.uid],otherUser:pendingMatchUser};
+    openChat(match);
+  }
+}
+
+/* ════════════════════════════════════════
+   MATCHES LIST
+════════════════════════════════════════ */
+async function loadMatches() {
+  if(!CU) return;
+  const list=document.getElementById('matches-list');
+  list.innerHTML=`<div style="display:flex;justify-content:center;padding:40px;"><div style="width:32px;height:32px;border:2px solid rgba(6,182,212,.2);border-top-color:#06b6d4;border-radius:50%;" class="anim-spin"></div></div>`;
+
+  const q=db.collection('matches').where('users','array-contains',CU.uid);
+  if(unsubMatches) unsubMatches();
+  unsubMatches=q.onSnapshot(async snap=>{
+    const ms=await Promise.all(snap.docs.map(async d=>{
+      const data=d.data();
+      const otherUid=data.users.find(id=>id!==CU.uid);
+      try {
+        const ou=await db.collection('users').doc(otherUid).get();
+        return {...data,id:d.id,otherUser:ou.data()};
+      } catch(e) { return {...data,id:d.id,otherUser:null}; }
+    }));
+    matches=ms.filter(m=>m.otherUser);
+    renderMatchesList();
+  });
+}
+
+function renderMatchesList() {
+  const list=document.getElementById('matches-list');
+  if(!matches.length) {
+    list.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;text-align:center;opacity:.5;">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:16px;"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+      <p style="font-weight:600;font-size:16px;">No matches yet</p>
+      <p style="font-size:13px;margin-top:6px;color:rgba(255,255,255,.4);">Keep swiping to find your match!</p>
+    </div>`;
+    return;
+  }
+  list.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+    ${matches.map(m=>`
+      <button onclick='openChatById("${m.id}")' style="position:relative;aspect-ratio:3/4;border-radius:22px;overflow:hidden;border:1px solid rgba(255,255,255,.1);cursor:pointer;background:#111;text-align:left;padding:0;">
+        <img src="${m.otherUser.photoURL||'https://picsum.photos/400/600'}" style="width:100%;height:100%;object-fit:cover;" referrerpolicy="no-referrer">
+        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.85),transparent 50%);"></div>
+        <div style="position:absolute;bottom:0;left:0;right:0;padding:14px;">
+          <p style="font-weight:700;font-size:15px;">${m.otherUser.displayName||'?'}</p>
+          <div style="display:flex;align-items:center;gap:5px;margin-top:3px;">
+            <div style="width:7px;height:7px;border-radius:50%;background:${m.otherUser.online?'#06b6d4':'#4b5563'};box-shadow:${m.otherUser.online?'0 0 6px #06b6d4':'none'};"></div>
+            <span style="font-size:10px;color:rgba(255,255,255,.5);">${m.otherUser.online?'Online':'Offline'}</span>
+          </div>
+        </div>
+      </button>
+    `).join('')}
+  </div>`;
+}
+
+function openChatById(matchId) {
+  const m=matches.find(x=>x.id===matchId);
+  if(m) openChat(m);
+}
+
+/* ════════════════════════════════════════
+   CHAT
+════════════════════════════════════════ */
+function openChat(match) {
+  activeMatch=match;
+  const other=match.otherUser;
+
+  // Header
+  document.getElementById('chat-name').textContent=other?.displayName||'?';
+  document.getElementById('chat-status').textContent=other?.online?'Online':'Offline';
+  document.getElementById('chat-online-dot').style.background=other?.online?'#06b6d4':'#4b5563';
+  if(other?.online) document.getElementById('chat-online-dot').style.boxShadow='0 0 6px #06b6d4';
+  else document.getElementById('chat-online-dot').style.boxShadow='none';
+
+  // Avatar
+  const av=document.getElementById('chat-avatar');
+  av.innerHTML='';
+  if(other?.photoURL) {
+    const img=document.createElement('img');
+    img.src=other.photoURL; img.referrerPolicy='no-referrer';
+    img.style.cssText='width:100%;height:100%;object-fit:cover;';
+    av.appendChild(img);
+  }
+  // Typing avatar
+  const tav=document.getElementById('typing-avatar');
+  tav.innerHTML=av.innerHTML;
+
+  // Call modal photo
+  const cp=document.getElementById('call-photo');
+  cp.innerHTML=av.innerHTML;
+  document.getElementById('call-name').textContent=other?.displayName||'?';
+
+  showView('chat');
+  document.getElementById('bottom-nav').style.display='none';
+  subscribeMessages();
+  subscribeTyping();
+}
+
+function subscribeMessages() {
+  if(unsubMessages) unsubMessages();
+  const q=db.collection('matches').doc(activeMatch.id)
+    .collection('messages').orderBy('createdAt','asc').limit(80);
+  unsubMessages=q.onSnapshot(snap=>{
+    activeMsgs=snap.docs.map(d=>({...d.data(),id:d.id}));
+    renderMessages();
+  });
+}
+
+function subscribeTyping() {
+  if(unsubTyping) unsubTyping();
+  unsubTyping=db.collection('matches').doc(activeMatch.id).onSnapshot(snap=>{
+    const data=snap.data();
+    const otherUid=activeMatch.users.find(id=>id!==CU.uid);
+    const isTyping=data?.typing?.[otherUid];
+    document.getElementById('typing-indicator').style.display=isTyping?'block':'none';
+    scrollMsgsBottom();
+  });
+}
+
+function renderMessages() {
+  const area=document.getElementById('messages-area');
+  if(!activeMsgs.length) {
+    area.innerHTML=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;opacity:.5;gap:10px;">
+      <div style="font-size:42px;">💬</div>
+      <p style="font-size:14px;">Say something to <strong>${activeMatch.otherUser?.displayName||'them'}</strong>!</p>
+    </div>`;
+    return;
+  }
+  area.innerHTML='<div style="flex:1;"></div>' + activeMsgs.map(msg=>{
+    const own=msg.senderUid===CU.uid;
+    const time=msg.createdAt?.toDate().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})||'';
+    const content=msg.audioURL
+      ? `<div style="display:flex;align-items:center;gap:8px;min-width:180px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg><audio src="${msg.audioURL}" controls style="height:28px;flex:1;"></audio></div>`
+      : (msg.text||'');
+    return `
+      <div style="display:flex;flex-direction:column;max-width:78%;${own?'align-self:flex-end;align-items:flex-end;':'align-self:flex-start;align-items:flex-start;'}">
+        <div style="padding:11px 16px;border-radius:${own?'18px 18px 4px 18px':'18px 18px 18px 4px'};font-size:14px;line-height:1.5;${own?'background:#06b6d4;color:#000;':'background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.1);color:#fff;'}">${content}</div>
+        <div style="display:flex;align-items:center;gap:4px;margin-top:3px;padding:0 4px;">
+          <span style="font-size:10px;color:rgba(255,255,255,.3);">${time}</span>
+          ${own?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2.5"><polyline points="17 1 9 15 1 8"/><polyline points="23 1 15 15 7 8"/></svg>':''}
+        </div>
+      </div>`;
+  }).join('');
+  scrollMsgsBottom();
+}
+
+function scrollMsgsBottom() {
+  const area=document.getElementById('messages-area');
+  setTimeout(()=>area.scrollTop=area.scrollHeight, 50);
+}
+
+async function sendMessage(e) {
+  e.preventDefault();
+  const input=document.getElementById('msg-input');
+  const text=input.value.trim();
+  if(!text||!activeMatch) return;
+  input.value='';
+  input.style.height='auto';
+  await setTypingStatus(false);
+  try {
+    await db.collection('matches').doc(activeMatch.id).collection('messages').add({
+      matchId:activeMatch.id,
+      senderUid:CU.uid,
+      text,
+      createdAt:FieldValue.serverTimestamp()
+    });
+  } catch(e) { console.error('Send error:',e); showToast('Failed to send.'); }
+}
+
+async function setTypingStatus(typing) {
+  if(!activeMatch||!CU) return;
+  try {
+    await db.collection('matches').doc(activeMatch.id).update({
+      [`typing.${CU.uid}`]: typing
+    });
+  } catch(e) {}
+}
+
+function handleTypingInput() {
+  setTypingStatus(true);
+  clearTimeout(typingTimer);
+  typingTimer=setTimeout(()=>setTypingStatus(false), 2000);
+}
+
+/* ════════════════════════════════════════
+   VOICE RECORDING
+════════════════════════════════════════ */
+async function toggleRecording() {
+  if(!isRecording) {
+    try {
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const recorder=new MediaRecorder(stream);
+      const chunks=[];
+      recorder.ondataavailable=e=>chunks.push(e.data);
+      recorder.onstop=async()=>{
+        const blob=new Blob(chunks,{type:'audio/webm'});
+        try {
+          const ref=stor.ref(`audio/${CU.uid}_${Date.now()}.webm`);
+          await ref.put(blob);
+          const url=await ref.getDownloadURL();
+          await db.collection('matches').doc(activeMatch.id).collection('messages').add({
+            matchId:activeMatch.id, senderUid:CU.uid, text:'',
+            audioURL:url, createdAt:FieldValue.serverTimestamp()
+          });
+        } catch(e) { showToast('Audio upload failed.'); }
+      };
+      recorder.start();
+      mediaRecorder=recorder;
+      isRecording=true;
+      const btn=document.getElementById('mic-btn');
+      btn.style.color='#f43f5e';
+      btn.style.borderColor='rgba(244,63,94,.4)';
+      btn.style.animation='pulse-ring 1s ease infinite';
+    } catch(e) { showToast('Microphone access denied.'); }
+  } else {
+    if(mediaRecorder) {
+      mediaRecorder.stop();
+      mediaRecorder.stream.getTracks().forEach(t=>t.stop());
+    }
+    isRecording=false;
+    const btn=document.getElementById('mic-btn');
+    btn.style.color='rgba(255,255,255,.5)';
+    btn.style.borderColor='rgba(255,255,255,.1)';
+    btn.style.animation='none';
+  }
+}
+
+/* ════════════════════════════════════════
+   CALL UI
+════════════════════════════════════════ */
+// Add wave bars to call modal
+(function() {
+  const modal=document.getElementById('call-modal');
+  const waveContainer=modal.querySelector('[style*="gap:6px"]');
+  if(waveContainer){
+    for(let i=0;i<14;i++){
+      const bar=document.createElement('div');
+      bar.style.cssText=`width:3px;background:#06b6d4;border-radius:3px;animation:wave .6s ease-in-out infinite;animation-delay:${i*0.05}s;`;
+      bar.className='wave-bar';
+      waveContainer.appendChild(bar);
+    }
+  }
+})();
+
+function startCall() { openModal('call-modal'); }
+function endCall() { closeModal('call-modal'); }
+
+/* ════════════════════════════════════════
+   INIT
+════════════════════════════════════════ */
+// Render interests grid on DOMContentLoaded
+document.addEventListener('DOMContentLoaded', ()=>renderInterestsGrid());
+</script>
+</body>
+</html>
