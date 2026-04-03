@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NeonHeart - Futuristic Dating</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *{font-family:'Inter',sans-serif;box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:#000;color:#fff;height:100%;}
+  body{overflow:hidden;}
+  #app{height:100vh;height:100dvh;display:flex;flex-direction:column;}
+
+  /* Safe area for notch devices */
+  .safe-top{padding-top:env(safe-area-inset-top,0px);}
+  .safe-bottom{padding-bottom:env(safe-area-inset-bottom,12px);}
+
+  .scroll-area{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .scroll-area::-webkit-scrollbar{width:0;}
+  select{background-image:none!important;}
+  select option{background:#111;color:#fff;}
+
+  .drag-card{touch-action:pan-y;cursor:grab;user-select:none;}
+  .drag-card:active{cursor:grabbing;}
+
+  @keyframes pulse-ring{0%,100%{transform:scale(1);opacity:.3}50%{transform:scale(1.2);opacity:.6}}
+  @keyframes bounce-heart{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  @keyframes spin-loader{to{transform:rotate(360deg)}}
+  @keyframes fade-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes blink{0%,100%{opacity:0.2}50%{opacity:1}}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  @keyframes score-pop{0%{transform:scale(0) rotate(-10deg);opacity:0}60%{transform:scale(1.2) rotate(3deg)}100%{transform:scale(1) rotate(0);opacity:1}}
+  @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+  @keyframes slide-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+
+  .anim-fade{animation:fade-in .4s ease forwards;}
+  .anim-spin{animation:spin-loader .8s linear infinite;}
+  .anim-bounce{animation:bounce-heart 1s ease infinite;}
+  .anim-pulse{animation:pulse-ring 2s ease infinite;}
+  .anim-float{animation:float 3s ease infinite;}
+
+  .glass{background:rgba(255,255,255,0.07);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.1);}
+  .glass-dark{background:rgba(0,0,0,0.65);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid rgba(255,255,255,0.08);}
+  .glow-cyan{box-shadow:0 0 20px rgba(6,182,212,.5);}
+
+  /* Swipe card stack */
+  .swipe-card{position:absolute;inset:0;border-radius:22px;overflow:hidden;}
+  .swipe-card:nth-child(3){transform:scale(.94) translateY(12px);z-index:0;}
+  .swipe-card:nth-child(2){transform:scale(.97) translateY(6px);z-index:1;}
+  .swipe-card:last-child{z-index:2;}
+
+  .stamp-like{position:absolute;top:28px;left:20px;border:4px solid #06b6d4;color:#06b6d4;padding:5px 14px;border-radius:10px;font-size:26px;font-weight:900;transform:rotate(-20deg);opacity:0;transition:opacity .12s;z-index:10;pointer-events:none;}
+  .stamp-nope{position:absolute;top:28px;right:20px;border:4px solid #f43f5e;color:#f43f5e;padding:5px 14px;border-radius:10px;font-size:26px;font-weight:900;transform:rotate(20deg);opacity:0;transition:opacity .12s;z-index:10;pointer-events:none;}
+  .stamp-super{position:absolute;bottom:130px;left:50%;transform:translateX(-50%);border:4px solid #f59e0b;color:#f59e0b;padding:5px 18px;border-radius:10px;font-size:22px;font-weight:900;opacity:0;transition:opacity .12s;z-index:10;pointer-events:none;}
+
+  .inp{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:13px 18px;color:#fff;font-size:15px;outline:none;transition:border-color .2s;}
+  .inp::placeholder{color:rgba(255,255,255,.3);}
+  .inp:focus{border-color:#06b6d4;}
+
+  .typing-dot{width:6px;height:6px;background:rgba(255,255,255,.4);border-radius:50%;display:inline-block;margin:0 2px;}
+  .typing-dot:nth-child(1){animation:blink 1.2s ease infinite 0s}
+  .typing-dot:nth-child(2){animation:blink 1.2s ease infinite .2s}
+  .typing-dot:nth-child(3){animation:blink 1.2s ease infinite .4s}
+
+  .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+
+  /* Page system */
+  .view{display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;}
+  .view.active{display:flex;}
+  .modal{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;}
+  .modal.open{display:flex;}
+
+  .nav-btn.active{color:#06b6d4;}
+  .nav-btn.active svg{fill:rgba(6,182,212,.15);}
+
+  /* Compatibility badges */
+  .compat-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:100px;font-size:11px;font-weight:700;border:1px solid;}
+  .compat-high{background:rgba(6,182,212,.15);border-color:rgba(6,182,212,.4);color:#22d3ee;}
+  .compat-mid{background:rgba(168,85,247,.15);border-color:rgba(168,85,247,.4);color:#c084fc;}
+  .compat-low{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.5);}
+
+  .mood-pill{padding:8px 16px;border-radius:100px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;}
+  .mood-pill.active{background:#06b6d4;border-color:#06b6d4;color:#000;font-weight:700;}
+
+  .prompt-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:16px 18px;cursor:pointer;transition:all .2s;}
+  .prompt-card:hover{border-color:rgba(168,85,247,.4);background:rgba(168,85,247,.07);}
+
+  .quiz-opt{width:100%;padding:13px 17px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:13px;color:#fff;font-size:14px;cursor:pointer;text-align:left;transition:all .2s;margin-bottom:10px;}
+  .quiz-opt:hover{background:rgba(6,182,212,.1);border-color:rgba(6,182,212,.3);}
+  .quiz-opt.selected{background:rgba(6,182,212,.2);border-color:#06b6d4;color:#22d3ee;}
+
+  .btn-primary{width:100%;padding:15px;background:#06b6d4;color:#000;font-weight:800;font-size:15px;border:none;border-radius:100px;cursor:pointer;transition:transform .2s,box-shadow .2s;box-shadow:0 0 20px rgba(6,182,212,.4);}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 0 30px rgba(6,182,212,.6);}
+  .btn-primary:active{transform:scale(.97);}
+  .btn-outline{width:100%;padding:15px;background:transparent;color:#fff;font-weight:700;font-size:15px;border:1px solid rgba(255,255,255,.2);border-radius:100px;cursor:pointer;transition:background .2s;}
+  .btn-outline:hover{background:rgba(255,255,255,.08);}
+  .btn-outline:active{transform:scale(.97);}
+  .btn-gold{width:100%;padding:15px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:800;font-size:15px;border:none;border-radius:100px;cursor:pointer;box-shadow:0 0 20px rgba(245,158,11,.35);}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- BG Glows -->
+  <div style="position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0;">
+    <div style="position:absolute;top:-10%;left:-10%;width:40%;height:40%;background:rgba(88,28,135,.18);filter:blur(100px);border-radius:50%;"></div>
+    <div style="position:absolute;bottom:-10%;right:-10%;width:40%;height:40%;background:rgba(8,145,178,.15);filter:blur(100px);border-radius:50%;"></div>
+    <div style="position:absolute;top:50%;right:-5%;width:25%;height:25%;background:rgba(244,63,94,.07);filter:blur(80px);border-radius:50%;"></div>
+  </div>
+
+  <div style="position:relative;z-index:1;max-width:430px;width:100%;margin:0 auto;flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;">
+
+    <!-- LOADER -->
+    <div id="loader" style="position:fixed;inset:0;background:#000;z-index:200;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
+      <div style="width:48px;height:48px;border:3px solid rgba(6,182,212,.2);border-top-color:#06b6d4;border-radius:50%;" class="anim-spin"></div>
+      <p style="color:rgba(255,255,255,.3);font-size:12px;font-family:monospace;letter-spacing:.12em;">NEONHEART</p>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" style="position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-90px);background:#111;border:1px solid rgba(255,255,255,.15);border-radius:100px;padding:10px 22px;font-size:14px;z-index:999;transition:transform .4s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;pointer-events:none;max-width:90vw;text-align:center;"></div>
+
+    <!-- ██ LANDING ██ -->
+    <div id="view-landing" class="view active scroll-area" style="align-items:center;justify-content:center;padding:40px 28px 60px;text-align:center;">
+      <div class="anim-fade" style="width:100%;">
+        <div style="width:88px;height:88px;background:linear-gradient(135deg,#06b6d4,#9333ea);border-radius:26px;display:flex;align-items:center;justify-content:center;margin:0 auto 22px;box-shadow:0 0 40px rgba(6,182,212,.4);" class="anim-float">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="white"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+        </div>
+        <h1 style="font-size:42px;font-weight:900;letter-spacing:-2px;background:linear-gradient(135deg,#22d3ee,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px;">NEON HEART</h1>
+        <p style="color:rgba(255,255,255,.5);font-size:15px;max-width:270px;margin:0 auto 18px;line-height:1.65;">Find your futuristic match. Smarter. Deeper. More human.</p>
+        <div style="display:flex;justify-content:center;gap:10px;margin-bottom:40px;flex-wrap:wrap;">
+          <span style="font-size:11px;color:#22d3ee;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.25);padding:4px 10px;border-radius:100px;">✦ Vibe Matching</span>
+          <span style="font-size:11px;color:#c084fc;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);padding:4px 10px;border-radius:100px;">✦ Ice-Breaker Games</span>
+          <span style="font-size:11px;color:#fb923c;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.25);padding:4px 10px;border-radius:100px;">✦ Daily Sparks</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;width:100%;max-width:320px;margin:0 auto;">
+          <button class="btn-primary" onclick="showAuth('signup')">Create Account</button>
+          <button class="btn-outline" onclick="showAuth('login')">Sign In</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ██ AUTH ██ -->
+    <div id="view-auth" class="view scroll-area" style="padding:28px 26px 60px;">
+      <button onclick="showView('landing')" style="color:rgba(255,255,255,.5);display:flex;align-items:center;gap:6px;margin-bottom:24px;font-size:14px;background:none;border:none;cursor:pointer;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Back
+      </button>
+      <h2 id="auth-title" style="font-size:28px;font-weight:800;margin-bottom:24px;">Welcome Back</h2>
+      <div id="auth-error" style="display:none;padding:12px 16px;background:rgba(244,63,94,.12);border:1px solid rgba(244,63,94,.25);border-radius:12px;color:#f43f5e;font-size:13px;margin-bottom:16px;"></div>
+      <form id="auth-form" onsubmit="handleAuth(event)" style="display:flex;flex-direction:column;gap:17px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:8px;">Email Address</label>
+          <input name="email" type="email" required class="inp" placeholder="name@example.com" autocomplete="email">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:8px;">Password</label>
+          <input name="password" type="password" required class="inp" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button type="submit" id="auth-submit" class="btn-primary" style="margin-top:6px;">Sign In</button>
+      </form>
+      <p style="text-align:center;color:rgba(255,255,255,.4);margin-top:22px;font-size:14px;">
+        <span id="auth-switch-text">Don't have an account?</span>
+        <button id="auth-switch-btn" onclick="toggleAuthMode()" style="color:#22d3ee;font-weight:700;background:none;border:none;cursor:pointer;margin-left:6px;">Sign Up</button>
+      </p>
+    </div>
+
+    <!-- ██ PROFILE SETUP ██ -->
+    <div id="view-profile" class="view" style="padding:0;">
+      <!-- Fixed header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 16px;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,.06);">
+        <h2 style="font-size:26px;font-weight:800;">Profile Setup</h2>
+        <span id="setup-step-label" style="color:#06b6d4;font-family:monospace;font-size:13px;">Step 1/4</span>
+      </div>
+      <!-- Scrollable content -->
+      <div class="scroll-area" style="flex:1;padding:20px 24px;min-height:0;">
+        <!-- Step 1 -->
+        <div id="step-1" style="display:flex;flex-direction:column;gap:18px;padding-bottom:20px;">
+          <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:4px;">
+            <div style="position:relative;" onclick="document.getElementById('photo-input').click()">
+              <div id="avatar-preview" style="width:110px;height:110px;border-radius:50%;border:2px solid rgba(6,182,212,.5);background:rgba(255,255,255,.05);overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0112 0v2"/></svg>
+              </div>
+              <div style="position:absolute;bottom:2px;right:2px;width:32px;height:32px;background:#06b6d4;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 12px rgba(6,182,212,.5);">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              </div>
+              <input type="file" id="photo-input" accept="image/*" style="display:none;" onchange="handlePhotoUpload(this)">
+            </div>
+            <p style="color:rgba(255,255,255,.35);font-size:12px;margin-top:8px;">Tap to upload photo</p>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Display Name</label>
+            <input id="s-name" class="inp" placeholder="Your name">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;">
+            <div>
+              <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Age</label>
+              <input id="s-age" type="number" min="18" max="99" class="inp" placeholder="25">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Gender</label>
+              <select id="s-gender" class="inp" style="appearance:none;">
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="non-binary">Non-Binary</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <!-- Step 2 -->
+        <div id="step-2" style="display:none;flex-direction:column;gap:18px;padding-bottom:20px;">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Your Bio</label>
+            <textarea id="s-bio" class="inp" rows="4" placeholder="Tell the future about yourself..." style="resize:none;"></textarea>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Location</label>
+            <input id="s-location" class="inp" placeholder="Neo Tokyo, Night City...">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Profile Prompt</label>
+            <select id="s-prompt-q" class="inp" style="appearance:none;margin-bottom:10px;">
+              <option value="Two truths and a lie…">Two truths and a lie…</option>
+              <option value="My happy place is…">My happy place is…</option>
+              <option value="The way to my heart is…">The way to my heart is…</option>
+              <option value="I'm weirdly obsessed with…">I'm weirdly obsessed with…</option>
+              <option value="On weekends you'll find me…">On weekends you'll find me…</option>
+              <option value="My love language is…">My love language is…</option>
+            </select>
+            <textarea id="s-prompt-a" class="inp" rows="2" placeholder="Your answer..." style="resize:none;"></textarea>
+          </div>
+        </div>
+        <!-- Step 3: Interests -->
+        <div id="step-3" style="display:none;padding-bottom:20px;">
+          <p style="color:rgba(255,255,255,.5);font-size:14px;margin-bottom:18px;">Select your interests (better matches!)</p>
+          <div id="interests-grid" style="display:flex;flex-wrap:wrap;gap:9px;"></div>
+        </div>
+        <!-- Step 4: Vibe Quiz -->
+        <div id="step-4" style="display:none;padding-bottom:20px;">
+          <p style="color:rgba(255,255,255,.5);font-size:14px;margin-bottom:4px;">Quick vibe check — 4 questions</p>
+          <p style="color:rgba(255,255,255,.3);font-size:12px;margin-bottom:20px;">Helps calculate your compatibility score</p>
+          <div id="quiz-container"></div>
+        </div>
+      </div>
+      <!-- Fixed footer buttons -->
+      <div style="padding:14px 24px;border-top:1px solid rgba(255,255,255,.06);display:flex;gap:12px;flex-shrink:0;" class="safe-bottom">
+        <button id="setup-back-btn" onclick="setupPrev()" class="btn-outline" style="flex:1;display:none;padding:13px;">Back</button>
+        <button id="setup-next-btn" onclick="setupNext()" class="btn-primary" style="flex:1;padding:13px;">Continue</button>
+      </div>
+    </div>
+
+    <!-- ██ DASHBOARD ██ -->
+    <div id="view-dashboard" class="view" style="padding:0;overflow:hidden;">
+      <header style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="#06b6d4"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+          <span style="font-size:18px;font-weight:900;letter-spacing:-.5px;">NEON</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;">
+          <button onclick="openMoodPicker()" id="mood-btn" style="height:32px;padding:0 12px;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.25);border-radius:100px;color:#22d3ee;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;">
+            <span id="mood-label">🌟 Vibe?</span>
+          </button>
+          <button onclick="handleSignOut()" style="width:32px;height:32px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:50%;color:rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          </button>
+        </div>
+      </header>
+      <div style="flex:1;padding:0 14px 8px;display:flex;flex-direction:column;min-height:0;overflow:hidden;">
+        <div id="card-stack" style="position:relative;flex:1;min-height:0;"></div>
+        <div id="no-profiles" style="display:none;flex:1;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px;">
+          <div style="font-size:46px;margin-bottom:14px;" class="anim-float">✨</div>
+          <h3 style="font-size:20px;font-weight:700;margin-bottom:8px;">You're all caught up!</h3>
+          <p style="color:rgba(255,255,255,.4);font-size:14px;margin-bottom:22px;">Check back soon for new profiles.</p>
+          <button class="btn-outline" style="width:auto;padding:11px 28px;" onclick="reloadFeed()">Refresh Feed</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ██ MATCHES ██ -->
+    <div id="view-matches" class="view" style="padding:0;">
+      <div style="padding:18px 22px 8px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+        <h2 style="font-size:26px;font-weight:800;">Matches</h2>
+        <div id="likes-badge" style="display:none;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);border-radius:100px;padding:5px 13px;cursor:pointer;" onclick="showToast('🔮 See who liked you — Premium feature, coming soon!',3000)">
+          <span style="font-size:11px;color:#c084fc;font-weight:700;">👀 Liked you</span>
+        </div>
+      </div>
+      <div id="matches-list" class="scroll-area" style="flex:1;padding:0 14px 16px;"></div>
+    </div>
+
+    <!-- ██ CHAT ██ -->
+    <div id="view-chat" class="view" style="padding:0;">
+      <div class="glass-dark" style="padding:11px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button onclick="backFromChat()" style="width:32px;height:32px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:50%;color:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div style="position:relative;">
+            <div id="chat-avatar" style="width:38px;height:38px;border-radius:50%;overflow:hidden;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;"></div>
+            <div id="chat-online-dot" style="position:absolute;bottom:1px;right:1px;width:9px;height:9px;border-radius:50%;border:2px solid #000;background:#4b5563;"></div>
+          </div>
+          <div style="overflow:hidden;">
+            <p id="chat-name" style="font-weight:700;font-size:15px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></p>
+            <p id="chat-status" style="font-size:11px;color:#6b7280;margin-top:1px;"></p>
+          </div>
+        </div>
+        <div style="display:flex;gap:7px;flex-shrink:0;">
+          <button onclick="openSparkModal()" style="width:32px;height:32px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);border-radius:50%;color:#f59e0b;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Daily Spark">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#f59e0b"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </button>
+          <button onclick="openGameModal()" style="width:32px;height:32px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);border-radius:50%;color:#a855f7;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Ice Breaker">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </button>
+        </div>
+      </div>
+      <!-- Spark banner -->
+      <div id="spark-banner" style="display:none;background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,146,60,.08));border-bottom:1px solid rgba(245,158,11,.2);padding:9px 16px;cursor:pointer;flex-shrink:0;" onclick="openSparkModal()">
+        <p style="font-size:12px;color:#f59e0b;font-weight:700;">⚡ They answered today's Spark — tap to see!</p>
+      </div>
+      <div id="messages-area" class="scroll-area" style="flex:1;padding:14px;display:flex;flex-direction:column;gap:10px;"></div>
+      <div id="typing-indicator" style="display:none;padding:4px 18px 4px;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <div id="typing-avatar" style="width:22px;height:22px;border-radius:50%;overflow:hidden;background:rgba(255,255,255,.08);flex-shrink:0;"></div>
+          <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:14px 14px 14px 4px;padding:9px 13px;display:flex;gap:4px;align-items:center;">
+            <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
+          </div>
+        </div>
+      </div>
+      <div class="glass-dark" style="padding:10px 13px;flex-shrink:0;" class="safe-bottom">
+        <form id="chat-form" onsubmit="sendMessage(event)" style="display:flex;align-items:center;gap:8px;">
+          <input id="msg-input" class="inp" placeholder="Type a message…" autocomplete="off" oninput="handleTypingInput()" style="flex:1;padding:11px 15px;">
+          <button type="submit" style="width:40px;height:40px;background:#06b6d4;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;" class="glow-cyan">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ██ EXPLORE ██ -->
+    <div id="view-explore" class="view" style="padding:0;">
+      <div style="padding:18px 22px 10px;flex-shrink:0;">
+        <h2 style="font-size:26px;font-weight:800;">Explore</h2>
+        <p style="color:rgba(255,255,255,.4);font-size:13px;margin-top:3px;">Browse without swiping</p>
+      </div>
+      <div id="explore-grid" class="scroll-area" style="flex:1;padding:0 14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:11px;align-content:start;"></div>
+    </div>
+
+    <!-- ██ MY PROFILE ██ -->
+    <div id="view-myprofile" class="view scroll-area" style="padding:0 0 24px;">
+      <div style="position:relative;height:220px;flex-shrink:0;">
+        <div id="myprofile-cover" style="width:100%;height:100%;background:linear-gradient(135deg,#06b6d4,#9333ea);"></div>
+        <div style="position:absolute;bottom:-36px;left:20px;">
+          <div id="myprofile-avatar" style="width:76px;height:76px;border-radius:50%;border:4px solid #000;overflow:hidden;background:#111;"></div>
+        </div>
+      </div>
+      <div style="padding:46px 22px 0;">
+        <div id="myprofile-name" style="font-size:22px;font-weight:800;"></div>
+        <div id="myprofile-meta" style="color:rgba(255,255,255,.5);font-size:13px;margin-top:3px;"></div>
+        <div id="myprofile-bio" style="color:rgba(255,255,255,.7);font-size:14px;line-height:1.65;margin-top:11px;"></div>
+        <div id="myprofile-prompt" style="margin-top:14px;"></div>
+        <div id="myprofile-interests" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;"></div>
+        <div style="margin-top:22px;display:flex;flex-direction:column;gap:11px;">
+          <button class="btn-outline" onclick="showView('profile')">✏️ Edit Profile</button>
+          <button onclick="handleSignOut()" style="padding:13px;background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.25);border-radius:100px;color:#f43f5e;font-weight:700;font-size:14px;cursor:pointer;">Sign Out</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ██ BOTTOM NAV ██ -->
+    <nav id="bottom-nav" style="display:none;background:rgba(0,0,0,.9);border-top:1px solid rgba(255,255,255,.08);flex-shrink:0;" class="safe-bottom">
+      <div style="display:flex;justify-content:space-around;padding:6px 0;">
+        <button class="nav-btn" id="nav-home" onclick="navTo('dashboard')" style="padding:7px 20px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.4);display:flex;flex-direction:column;align-items:center;gap:2px;transition:color .2s;">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+          <span style="font-size:10px;font-weight:600;">Discover</span>
+        </button>
+        <button class="nav-btn" id="nav-matches" onclick="navTo('matches')" style="position:relative;padding:7px 20px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.4);display:flex;flex-direction:column;align-items:center;gap:2px;transition:color .2s;">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <span style="font-size:10px;font-weight:600;">Matches</span>
+          <div id="match-notif-dot" style="display:none;position:absolute;top:5px;right:16px;width:7px;height:7px;background:#f43f5e;border-radius:50%;border:2px solid #000;"></div>
+        </button>
+        <button class="nav-btn" id="nav-explore" onclick="navTo('explore')" style="padding:7px 20px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.4);display:flex;flex-direction:column;align-items:center;gap:2px;transition:color .2s;">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span style="font-size:10px;font-weight:600;">Explore</span>
+        </button>
+        <button class="nav-btn" id="nav-profile" onclick="navTo('myprofile')" style="padding:7px 20px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.4);display:flex;flex-direction:column;align-items:center;gap:2px;transition:color .2s;">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0112 0v2"/></svg>
+          <span style="font-size:10px;font-weight:600;">Profile</span>
+        </button>
+      </div>
+    </nav>
+
+  </div><!-- /container -->
+</div><!-- /#app -->
+
+<!-- ██ MATCH MODAL ██ -->
+<div class="modal" id="match-modal" style="background:rgba(0,0,0,.95);z-index:150;flex-direction:column;padding:44px 28px;text-align:center;">
+  <div style="position:relative;margin-bottom:24px;">
+    <div style="position:absolute;inset:0;background:#06b6d4;filter:blur(60px);opacity:.22;border-radius:50%;" class="anim-pulse"></div>
+    <div style="display:flex;align-items:center;gap:16px;position:relative;z-index:1;justify-content:center;">
+      <div id="match-my-photo" style="width:88px;height:88px;border-radius:50%;border:4px solid #06b6d4;overflow:hidden;background:rgba(255,255,255,.1);"></div>
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="#f43f5e" class="anim-bounce"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+      <div id="match-their-photo" style="width:88px;height:88px;border-radius:50%;border:4px solid #06b6d4;overflow:hidden;background:rgba(255,255,255,.1);"></div>
+    </div>
+  </div>
+  <h2 style="font-size:38px;font-weight:900;letter-spacing:-2px;background:linear-gradient(135deg,#22d3ee,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-style:italic;margin-bottom:8px;">IT'S A MATCH!</h2>
+  <p style="color:rgba(255,255,255,.5);font-size:15px;margin-bottom:14px;">You and <span id="match-name" style="color:#fff;font-weight:700;"></span> connected ✨</p>
+  <div id="match-compat-display" style="display:flex;justify-content:center;margin-bottom:26px;"></div>
+  <div style="display:flex;flex-direction:column;gap:11px;width:100%;max-width:280px;margin:0 auto;">
+    <button class="btn-primary" onclick="openMatchChat()">Send a Message 💬</button>
+    <button onclick="closeModal('match-modal')" style="color:rgba(255,255,255,.4);background:none;border:none;cursor:pointer;padding:9px;font-size:14px;">Keep Swiping</button>
+  </div>
+</div>
+
+<!-- ██ MOOD PICKER ██ -->
+<div class="modal" id="mood-modal" style="background:rgba(0,0,0,.92);z-index:150;flex-direction:column;padding:36px 26px;align-items:stretch;justify-content:center;">
+  <h3 style="font-size:22px;font-weight:800;margin-bottom:7px;text-align:center;">What's your vibe today?</h3>
+  <p style="color:rgba(255,255,255,.4);font-size:14px;margin-bottom:24px;text-align:center;">This affects who you see in your feed</p>
+  <div style="display:flex;flex-direction:column;gap:11px;">
+    <button class="mood-pill" onclick="setMood('deep-convo','🧠 Deep conversation')">🧠 I want a deep conversation</button>
+    <button class="mood-pill" onclick="setMood('fun','🎉 Fun & playful')">🎉 Something fun & playful</button>
+    <button class="mood-pill" onclick="setMood('adventure','🌍 Adventure & explore')">🌍 Adventure & explore</button>
+    <button class="mood-pill" onclick="setMood('chill','☕ Just chill & vibe')">☕ Just chill & vibe</button>
+    <button class="mood-pill" onclick="setMood('serious','💍 Serious connection')">💍 Serious connection</button>
+  </div>
+  <button onclick="closeModal('mood-modal')" style="margin-top:22px;color:rgba(255,255,255,.35);background:none;border:none;font-size:14px;cursor:pointer;">Skip for now</button>
+</div>
+
+<!-- ██ ICE BREAKER MODAL ██ -->
+<div class="modal" id="game-modal" style="background:rgba(0,0,0,.96);z-index:155;flex-direction:column;padding:28px 26px;align-items:stretch;max-height:90vh;overflow-y:auto;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+    <h3 style="font-size:20px;font-weight:800;">🕵️ Two Truths & a Lie</h3>
+    <button onclick="closeModal('game-modal')" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:50%;width:30px;height:30px;color:rgba(255,255,255,.5);font-size:17px;cursor:pointer;">✕</button>
+  </div>
+  <div id="game-content"></div>
+</div>
+
+<!-- ██ DAILY SPARK MODAL ██ -->
+<div class="modal" id="spark-modal" style="background:rgba(0,0,0,.96);z-index:155;flex-direction:column;padding:28px 26px;align-items:stretch;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+    <h3 style="font-size:20px;font-weight:800;">⚡ Daily Spark</h3>
+    <button onclick="closeModal('spark-modal')" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:50%;width:30px;height:30px;color:rgba(255,255,255,.5);font-size:17px;cursor:pointer;">✕</button>
+  </div>
+  <div id="spark-content"></div>
+</div>
+
+<script>
+/* ════════════ FIREBASE ════════════ */
+firebase.initializeApp({
+  apiKey:"AIzaSyDsc7eq6y-FmSp5QyNg9PTlg5ZVbUlU_Ok",
+  authDomain:"dating-f5c7f.firebaseapp.com",
+  projectId:"dating-f5c7f",
+  storageBucket:"dating-f5c7f.firebasestorage.app",
+  messagingSenderId:"1068091857220",
+  appId:"1:1068091857220:web:ff9a4fb6625f978bac1f11"
+});
+const auth=firebase.auth(), db=firebase.firestore(), stor=firebase.storage();
+const FieldValue=firebase.firestore.FieldValue;
+
+/* ════════════ STATE ════════════ */
+let CU=null,CUD=null,feed=[],feedIdx=0,matches=[],activeMatch=null,activeMsgs=[];
+let typingTimer=null,unsubMessages=null,unsubTyping=null,unsubMatches=null,unsubIncoming=null;
+let knownMatchIds=new Set(),pendingMatchUser=null;
+let authMode='login',setupStep=1,photoURL='',selectedInterests=[],quizAnswers={};
+let currentMood=null;
+
+const INTERESTS=["Music","Fitness","Travel","Gaming","Art","Cooking","Tech","Movies","Outdoors","Photography","Reading","Dancing"];
+
+const QUIZ_QUESTIONS=[
+  {id:'q1',question:"Your ideal Friday night?",options:["Cozy home & deep talks","Out dancing until 3am","Hiking at sunset","Hosting a dinner party"]},
+  {id:'q2',question:"You'd describe yourself as…",options:["Introvert at heart","Total extrovert","Ambivert — depends on the day","Still figuring it out"]},
+  {id:'q3',question:"Conflict in a relationship?",options:["Talk it out immediately","Need space then reconnect","Write out my feelings first","Depends on the situation"]},
+  {id:'q4',question:"Love language?",options:["Quality time","Acts of service","Words of affirmation","Physical touch"]}
+];
+
+const DAILY_SPARKS=[
+  "What's something you've never told anyone?",
+  "If you could live anywhere for a year, where and why?",
+  "What's the best piece of advice you've ever received?",
+  "Describe your perfect day from morning to night.",
+  "What's a skill you'd love to learn and why?",
+  "What does 'home' mean to you?",
+  "What are you most proud of that you never talk about?",
+  "If money weren't a factor, what would you do with your life?"
+];
+
+/* ════════════ NAV ════════════ */
+const MAIN_VIEWS=['dashboard','matches','explore','myprofile'];
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const el=document.getElementById('view-'+name);
+  if(el)el.classList.add('active');
+  const nav=document.getElementById('bottom-nav');
+  nav.style.display=MAIN_VIEWS.includes(name)?'block':'none';
+  ['home','matches','explore','profile'].forEach(n=>document.getElementById('nav-'+n)?.classList.remove('active'));
+  if(name==='dashboard')document.getElementById('nav-home')?.classList.add('active');
+  if(name==='matches')document.getElementById('nav-matches')?.classList.add('active');
+  if(name==='explore')document.getElementById('nav-explore')?.classList.add('active');
+  if(name==='myprofile')document.getElementById('nav-profile')?.classList.add('active');
+}
+function navTo(page){
+  if(!CU){showToast('Please sign in first.');return;}
+  if(page==='matches')loadMatches();
+  if(page==='explore')renderExploreGrid();
+  if(page==='myprofile')renderMyProfile();
+  showView(page);
+}
+function backFromChat(){
+  if(unsubMessages){unsubMessages();unsubMessages=null;}
+  if(unsubTyping){unsubTyping();unsubTyping=null;}
+  showView('matches');
+  document.getElementById('bottom-nav').style.display='block';
+  loadMatches();
+}
+
+/* ════════════ TOAST ════════════ */
+let toastTimer;
+function showToast(msg,ms=2800){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.style.transform='translateX(-50%) translateY(0)';
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.style.transform='translateX(-50%) translateY(-90px)',ms);
+}
+
+/* ════════════ MODAL ════════════ */
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+/* ════════════ AUTH ════════════ */
+firebase.auth().onAuthStateChanged(async(user)=>{
+  const loader=document.getElementById('loader');
+  if(user){
+    CU=user;
+    try{
+      const snap=await db.collection('users').doc(user.uid).get();
+      if(snap.exists){
+        CUD=snap.data();
+        updateOnlineStatus(true);
+        await loadFeed();
+        showView('dashboard');
+        document.getElementById('bottom-nav').style.display='block';
+        startIncomingMatchListener();
+        checkLikedYou();
+      } else {
+        showView('profile');
+        renderInterestsGrid();renderQuiz();
+      }
+    }catch(e){showView('profile');renderInterestsGrid();renderQuiz();}
+  } else {
+    CU=null;CUD=null;
+    showView('landing');
+  }
+  loader.style.display='none';
+});
+function showAuth(mode){
+  authMode=mode;
+  document.getElementById('auth-title').textContent=mode==='login'?'Welcome Back':'Join the Future';
+  document.getElementById('auth-submit').textContent=mode==='login'?'Sign In':'Sign Up';
+  document.getElementById('auth-switch-text').textContent=mode==='login'?"Don't have an account?":"Already have an account?";
+  document.getElementById('auth-switch-btn').textContent=mode==='login'?'Sign Up':'Sign In';
+  document.getElementById('auth-error').style.display='none';
+  showView('auth');
+}
+function toggleAuthMode(){showAuth(authMode==='login'?'signup':'login');}
+async function handleAuth(e){
+  e.preventDefault();
+  const email=e.target.email.value,pass=e.target.password.value;
+  const errEl=document.getElementById('auth-error');errEl.style.display='none';
+  const btn=document.getElementById('auth-submit');btn.textContent='...';btn.disabled=true;
+  try{
+    if(authMode==='login')await auth.signInWithEmailAndPassword(email,pass);
+    else await auth.createUserWithEmailAndPassword(email,pass);
+  }catch(err){
+    errEl.textContent=friendlyAuthErr(err.code);errEl.style.display='block';
+    btn.textContent=authMode==='login'?'Sign In':'Sign Up';btn.disabled=false;
+  }
+}
+async function handleSignOut(){
+  updateOnlineStatus(false);
+  await auth.signOut();
+  CU=null;CUD=null;feed=[];feedIdx=0;matches=[];
+  document.getElementById('bottom-nav').style.display='none';
+  showView('landing');showToast('Signed out 👋');
+}
+function friendlyAuthErr(code){
+  const m={'auth/user-not-found':'No account with that email.','auth/wrong-password':'Incorrect password.','auth/email-already-in-use':'Email already in use.','auth/weak-password':'Password must be 6+ characters.','auth/invalid-email':'Invalid email.','auth/invalid-credential':'Invalid email or password.','auth/network-request-failed':'Network error.'};
+  return m[code]||'Something went wrong. Try again.';
+}
+
+/* ════════════ ONLINE STATUS ════════════ */
+async function updateOnlineStatus(online){
+  if(!CU)return;
+  try{await db.collection('users').doc(CU.uid).set({online,lastSeen:FieldValue.serverTimestamp()},{merge:true});}catch(e){}
+}
+window.addEventListener('visibilitychange',()=>{if(CU)updateOnlineStatus(document.visibilityState==='visible');});
+window.addEventListener('beforeunload',()=>{if(CU)updateOnlineStatus(false);});
+
+/* ════════════ PROFILE SETUP ════════════ */
+function renderInterestsGrid(){
+  const g=document.getElementById('interests-grid');if(!g)return;
+  g.innerHTML=INTERESTS.map(i=>`<button onclick="toggleInterest('${i}',this)" style="padding:8px 16px;border-radius:100px;font-size:13px;font-weight:500;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:rgba(255,255,255,.7);cursor:pointer;transition:all .2s;">${i}</button>`).join('');
+}
+function toggleInterest(name,btn){
+  const idx=selectedInterests.indexOf(name);
+  if(idx>=0){selectedInterests.splice(idx,1);btn.style.background='rgba(255,255,255,.05)';btn.style.borderColor='rgba(255,255,255,.12)';btn.style.color='rgba(255,255,255,.7)';btn.style.boxShadow='';}
+  else{selectedInterests.push(name);btn.style.background='#06b6d4';btn.style.borderColor='#06b6d4';btn.style.color='#000';btn.style.boxShadow='0 0 10px rgba(6,182,212,.35)';}
+}
+function renderQuiz(){
+  const c=document.getElementById('quiz-container');if(!c)return;
+  c.innerHTML=QUIZ_QUESTIONS.map((q,qi)=>`
+    <div style="margin-bottom:20px;">
+      <p style="font-size:14px;font-weight:700;margin-bottom:11px;color:rgba(255,255,255,.9);">${qi+1}. ${q.question}</p>
+      ${q.options.map((opt,oi)=>`<button class="quiz-opt" id="q${qi}_o${oi}" onclick="selectQuizAnswer('${q.id}','${opt}',${qi},${oi})">${opt}</button>`).join('')}
+    </div>`).join('');
+}
+function selectQuizAnswer(qId,answer,qi,oi){
+  quizAnswers[qId]=answer;
+  QUIZ_QUESTIONS[qi].options.forEach((_,i)=>{const b=document.getElementById(`q${qi}_o${i}`);if(b)b.classList.remove('selected');});
+  const b=document.getElementById(`q${qi}_o${oi}`);if(b)b.classList.add('selected');
+}
+async function handlePhotoUpload(input){
+  if(!input.files||!input.files[0])return;
+  const file=input.files[0];
+  const preview=document.getElementById('avatar-preview');preview.innerHTML='';
+  const reader=new FileReader();
+  reader.onload=e=>{const img=document.createElement('img');img.src=e.target.result;img.style.cssText='width:100%;height:100%;object-fit:cover;';preview.appendChild(img);photoURL=e.target.result;};
+  reader.readAsDataURL(file);
+  if(CU){
+    try{const ref=stor.ref('profiles/'+CU.uid);await ref.put(file);photoURL=await ref.getDownloadURL();}
+    catch(e){/* keep local preview */}
+  }
+}
+async function setupNext(){
+  if(setupStep===1){
+    const name=document.getElementById('s-name').value.trim();
+    const age=parseInt(document.getElementById('s-age').value);
+    if(!name)return showToast('Enter your display name.');
+    if(!age||age<18||age>99)return showToast('Enter a valid age (18+).');
+    gotoStep(2);
+  } else if(setupStep===2){
+    gotoStep(3);
+  } else if(setupStep===3){
+    gotoStep(4);
+    document.getElementById('setup-next-btn').textContent='Launch Profile 🚀';
+  } else {
+    const data={
+      uid:CU.uid,
+      displayName:document.getElementById('s-name').value.trim(),
+      age:parseInt(document.getElementById('s-age').value),
+      gender:document.getElementById('s-gender').value,
+      bio:document.getElementById('s-bio').value.trim()||'New to NeonHeart!',
+      location:document.getElementById('s-location').value.trim()||'The Grid',
+      promptQuestion:document.getElementById('s-prompt-q').value,
+      promptAnswer:document.getElementById('s-prompt-a').value.trim(),
+      interests:selectedInterests,quizAnswers,
+      photoURL:photoURL||`https://ui-avatars.com/api/?name=${encodeURIComponent(document.getElementById('s-name').value.trim())}&background=06b6d4&color=000&size=400`,
+      online:true,lastSeen:FieldValue.serverTimestamp(),createdAt:FieldValue.serverTimestamp(),blockedUsers:[]
+    };
+    try{
+      await db.collection('users').doc(CU.uid).set(data);
+      CUD=data;await loadFeed();
+      showView('dashboard');document.getElementById('bottom-nav').style.display='block';
+      startIncomingMatchListener();showToast('Profile live! 🎉');
+    }catch(e){showToast('Failed to save. Check Firestore rules.');console.error(e);}
+  }
+}
+function gotoStep(n){
+  document.getElementById('step-'+setupStep).style.display='none';
+  const el=document.getElementById('step-'+n);
+  el.style.display=n===1?'flex':n===3?'block':n===4?'block':'flex';
+  setupStep=n;
+  document.getElementById('setup-step-label').textContent=`Step ${n}/4`;
+  document.getElementById('setup-back-btn').style.display=n>1?'block':'none';
+  if(n<4)document.getElementById('setup-next-btn').textContent='Continue';
+  // scroll back to top
+  document.querySelector('#view-profile .scroll-area').scrollTop=0;
+}
+function setupPrev(){if(setupStep>1)gotoStep(setupStep-1);}
+
+/* ════════════ COMPATIBILITY SCORE ════════════ */
+function calcCompatScore(a,b){
+  let score=0,total=0;
+  const ai=a.interests||[],bi=b.interests||[];
+  if(ai.length&&bi.length){score+=Math.round((ai.filter(x=>bi.includes(x)).length/Math.max(ai.length,bi.length))*40);total+=40;}
+  const aq=a.quizAnswers||{},bq=b.quizAnswers||{};
+  QUIZ_QUESTIONS.forEach(q=>{if(aq[q.id]&&bq[q.id]){if(aq[q.id]===bq[q.id])score+=10;total+=10;}});
+  if(a.promptAnswer&&b.promptAnswer){score+=20;total+=20;}
+  if(total===0)return null;
+  return Math.round((score/total)*100);
+}
+function compatBadge(score){
+  if(score===null)return '';
+  const cls=score>=70?'compat-high':score>=45?'compat-mid':'compat-low';
+  const label=score>=70?'Great match':score>=45?'Good vibes':'Different paths';
+  return `<span class="compat-badge ${cls}">✦ ${score}% — ${label}</span>`;
+}
+
+/* ════════════ MOOD ════════════ */
+function openMoodPicker(){openModal('mood-modal');}
+function setMood(key,label){
+  currentMood=key;document.getElementById('mood-label').textContent=label;
+  closeModal('mood-modal');showToast('Vibe set! Refreshing…');reloadFeed();
+}
+
+/* ════════════ FEED / SWIPE ════════════ */
+async function loadFeed(){
+  if(!CU)return;
+  try{
+    const snap=await db.collection('users').limit(80).get();
+    const blocked=(CUD&&CUD.blockedUsers)||[];
+    // Show ONLY real registered users — no injected data
+    let users=snap.docs
+      .map(d=>({...d.data(),uid:d.id}))
+      .filter(u=>u.uid!==CU.uid && !blocked.includes(u.uid) && u.displayName && u.createdAt);
+    const myInterests=(CUD&&CUD.interests)||[];
+    users.sort((a,b)=>{
+      const oa=(a.interests||[]).filter(i=>myInterests.includes(i)).length;
+      const ob=(b.interests||[]).filter(i=>myInterests.includes(i)).length;
+      const ca=calcCompatScore(CUD||{},a)||0;
+      const cb=calcCompatScore(CUD||{},b)||0;
+      return (ob+cb)-(oa+ca);
+    });
+    feed=users;feedIdx=0;renderCards();
+    if(users.length===0)showToast('No other profiles yet. Invite friends!');
+  }catch(e){console.error('Feed error:',e);showToast('Could not load feed. Check Firestore rules.');}
+}
+async function reloadFeed(){feedIdx=0;await loadFeed();}
+
+function renderCards(){
+  const stack=document.getElementById('card-stack');
+  const noMore=document.getElementById('no-profiles');
+  if(feedIdx>=feed.length){stack.style.display='none';noMore.style.display='flex';return;}
+  noMore.style.display='none';stack.style.display='block';stack.innerHTML='';
+  const end=Math.min(feedIdx+3,feed.length);
+  for(let i=end-1;i>=feedIdx;i--)stack.appendChild(makeCard(feed[i],i===feedIdx));
+}
+
+function makeCard(user,isTop){
+  const div=document.createElement('div');
+  div.className='swipe-card'+(isTop?' drag-card':'');
+  div.dataset.uid=user.uid;
+  div.style.cssText='position:absolute;inset:0;border-radius:22px;overflow:hidden;background:#111;';
+  // Photo
+  const img=document.createElement('img');
+  img.src=user.photoURL||`https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName)}&background=06b6d4&color=000&size=400`;
+  img.style.cssText='width:100%;height:100%;object-fit:cover;pointer-events:none;';
+  img.referrerPolicy='no-referrer';
+  div.appendChild(img);
+  // Gradient
+  const grad=document.createElement('div');
+  grad.style.cssText='position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.93) 0%,rgba(0,0,0,.3) 45%,transparent 70%);';
+  div.appendChild(grad);
+  // Stamps
+  ['stamp-like LIKE','stamp-nope NOPE','stamp-super ⭐ SUPER'].forEach(s=>{
+    const [cls,txt]=s.split(' ');const el=document.createElement('div');el.className=cls;el.textContent=txt;div.appendChild(el);
+  });
+  // Score
+  const score=CUD?calcCompatScore(CUD,user):null;
+  // Info overlay
+  const info=document.createElement('div');
+  info.style.cssText='position:absolute;bottom:0;left:0;right:0;padding:18px 16px;';
+  const tags=(user.interests||[]).slice(0,3).map(i=>`<span style="padding:3px 9px;background:rgba(6,182,212,.15);border:1px solid rgba(6,182,212,.3);border-radius:100px;font-size:10px;color:#22d3ee;">${i}</span>`).join('');
+  const promptHTML=user.promptQuestion&&user.promptAnswer?`<div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:11px;padding:9px 13px;margin-bottom:10px;"><p style="font-size:9px;color:rgba(255,255,255,.4);margin-bottom:3px;">${user.promptQuestion}</p><p style="font-size:12px;color:rgba(255,255,255,.85);font-style:italic;">"${user.promptAnswer}"</p></div>`:'';
+  info.innerHTML=`
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px;">
+      <h3 style="font-size:24px;font-weight:800;">${user.displayName||'?'}, ${user.age||'?'}</h3>
+      ${score!==null?`<span class="compat-badge ${score>=70?'compat-high':score>=45?'compat-mid':'compat-low'}" style="animation:score-pop .5s ease forwards;">✦ ${score}%</span>`:''}
+    </div>
+    <p style="color:rgba(255,255,255,.55);font-size:12px;margin-bottom:9px;display:flex;align-items:center;gap:3px;">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="#06b6d4"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+      ${user.location||'Unknown'}
+    </p>
+    ${promptHTML}
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">${tags}</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:14px;">
+      <button onclick="event.stopPropagation();doSkip()" style="width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#f43f5e;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;" onmouseover="this.style.background='#f43f5e';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,.08)';this.style.color='#f43f5e'">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <button onclick="event.stopPropagation();doSuperLike()" style="width:44px;height:44px;border-radius:50%;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#f59e0b;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;" title="Super Like">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="#f59e0b"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      </button>
+      <button onclick="event.stopPropagation();doLike()" style="width:66px;height:66px;border-radius:50%;background:#06b6d4;border:none;color:#000;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 22px rgba(6,182,212,.5);transition:transform .2s;" onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform='scale(1)'">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="#000"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+      </button>
+    </div>`;
+  div.appendChild(info);
+  // Drag (top card only)
+  if(isTop){
+    let sx=0,sy=0,dx=0,dragging=false;
+    const likeStamp=div.querySelector('.stamp-like');
+    const nopeStamp=div.querySelector('.stamp-nope');
+    function onStart(e){dragging=true;const p=e.touches?e.touches[0]:e;sx=p.clientX;sy=p.clientY;div.style.transition='none';}
+    function onMove(e){
+      if(!dragging)return;
+      const p=e.touches?e.touches[0]:e;
+      dx=p.clientX-sx;const dy=p.clientY-sy;
+      div.style.transform=`translate(${dx}px,${dy*.3}px) rotate(${dx*.08}deg)`;
+      likeStamp.style.opacity=Math.max(0,Math.min(1,dx/80));
+      nopeStamp.style.opacity=Math.max(0,Math.min(1,-dx/80));
+    }
+    function onEnd(){
+      if(!dragging)return;dragging=false;cleanup();
+      if(dx>100)doLike();
+      else if(dx<-100)doSkip();
+      else{div.style.transition='transform .4s cubic-bezier(.34,1.56,.64,1)';div.style.transform='';likeStamp.style.opacity=0;nopeStamp.style.opacity=0;}
+      dx=0;
+    }
+    function cleanup(){window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',onEnd);window.removeEventListener('touchmove',onMove);window.removeEventListener('touchend',onEnd);}
+    div.addEventListener('mousedown',e=>{onStart(e);window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onEnd);});
+    div.addEventListener('touchstart',e=>{onStart(e);window.addEventListener('touchmove',onMove,{passive:true});window.addEventListener('touchend',onEnd);},{passive:true});
+  }
+  return div;
+}
+
+function animateOut(card,dir){
+  card.style.transition='transform .42s ease,opacity .32s';
+  card.style.transform=`translate(${dir==='right'?150:-150}%,-8%) rotate(${dir==='right'?18:-18}deg)`;
+  card.style.opacity='0';
+  setTimeout(()=>card.remove(),430);
+}
+function doSkip(){
+  const card=document.querySelector('#card-stack .swipe-card:last-child');
+  if(card)animateOut(card,'left');
+  feedIdx++;setTimeout(renderCards,440);
+}
+async function doLike(){
+  const user=feed[feedIdx];
+  const card=document.querySelector('#card-stack .swipe-card:last-child');
+  if(card)animateOut(card,'right');
+  feedIdx++;setTimeout(renderCards,440);
+  if(!user||!CU)return;
+  try{
+    await db.collection('likes').doc(`${CU.uid}_${user.uid}`).set({fromUid:CU.uid,toUid:user.uid,createdAt:FieldValue.serverTimestamp()});
+    const mutual=await db.collection('likes').doc(`${user.uid}_${CU.uid}`).get();
+    if(mutual.exists){
+      const matchId=[CU.uid,user.uid].sort().join('_');
+      await db.collection('matches').doc(matchId).set({users:[CU.uid,user.uid],createdAt:FieldValue.serverTimestamp()},{merge:true});
+      pendingMatchUser=user;showMatchModal(user);
+    }
+  }catch(e){console.error('Like error:',e);showToast('Like failed — check Firestore rules.');}
+}
+async function doSuperLike(){
+  const user=feed[feedIdx];
+  const card=document.querySelector('#card-stack .swipe-card:last-child');
+  const stamp=card?.querySelector('.stamp-super');
+  if(stamp){stamp.style.opacity='1';setTimeout(()=>{if(card)animateOut(card,'right');},350);}
+  else if(card)animateOut(card,'right');
+  feedIdx++;setTimeout(renderCards,480);
+  if(!user||!CU)return;
+  showToast(`⭐ Super liked ${user.displayName}!`);
+  try{
+    await db.collection('likes').doc(`${CU.uid}_${user.uid}`).set({fromUid:CU.uid,toUid:user.uid,superLike:true,createdAt:FieldValue.serverTimestamp()});
+    const mutual=await db.collection('likes').doc(`${user.uid}_${CU.uid}`).get();
+    if(mutual.exists){
+      const matchId=[CU.uid,user.uid].sort().join('_');
+      await db.collection('matches').doc(matchId).set({users:[CU.uid,user.uid],createdAt:FieldValue.serverTimestamp()},{merge:true});
+      pendingMatchUser=user;showMatchModal(user);
+    }
+  }catch(e){showToast('Super Like failed.');}
+}
+
+/* ════════════ INCOMING MATCH LISTENER ════════════ */
+function startIncomingMatchListener(){
+  if(unsubIncoming)unsubIncoming();
+  knownMatchIds=new Set();
+  const q=db.collection('matches').where('users','array-contains',CU.uid);
+  q.get().then(snap=>{
+    snap.docs.forEach(d=>knownMatchIds.add(d.id));
+    unsubIncoming=q.onSnapshot(snap=>{
+      snap.docChanges().forEach(async change=>{
+        if(change.type==='added'&&!knownMatchIds.has(change.doc.id)){
+          knownMatchIds.add(change.doc.id);
+          const data=change.doc.data();
+          const otherUid=data.users.find(id=>id!==CU.uid);
+          if(!otherUid)return;
+          if(pendingMatchUser&&pendingMatchUser.uid===otherUid)return;
+          try{
+            const ou=await db.collection('users').doc(otherUid).get();
+            if(ou.exists){pendingMatchUser=ou.data();showMatchModal(ou.data());document.getElementById('match-notif-dot').style.display='block';}
+          }catch(e){}
+        } else {knownMatchIds.add(change.doc.id);}
+      });
+    });
+  }).catch(()=>{});
+}
+
+/* ════════════ WHO LIKED YOU ════════════ */
+async function checkLikedYou(){
+  if(!CU)return;
+  try{
+    const snap=await db.collection('likes').where('toUid','==',CU.uid).get();
+    if(snap.docs.length>0){
+      document.getElementById('likes-badge').style.display='block';
+      document.getElementById('likes-badge').querySelector('span').textContent=`👀 ${snap.docs.length} liked you`;
+    }
+  }catch(e){}
+}
+
+/* ════════════ MATCH MODAL ════════════ */
+function showMatchModal(other){
+  const setPhoto=(elId,url,name)=>{
+    const el=document.getElementById(elId);el.innerHTML='';
+    if(url){const img=document.createElement('img');img.src=url;img.referrerPolicy='no-referrer';img.style.cssText='width:100%;height:100%;object-fit:cover;';el.appendChild(img);}
+  };
+  setPhoto('match-my-photo',CUD?.photoURL,'me');
+  setPhoto('match-their-photo',other?.photoURL,'them');
+  document.getElementById('match-name').textContent=other?.displayName||'them';
+  const score=CUD?calcCompatScore(CUD,other):null;
+  document.getElementById('match-compat-display').innerHTML=score!==null?compatBadge(score):'';
+  openModal('match-modal');
+}
+function openMatchChat(){
+  closeModal('match-modal');
+  if(pendingMatchUser){
+    const matchId=[CU.uid,pendingMatchUser.uid].sort().join('_');
+    openChat({id:matchId,users:[CU.uid,pendingMatchUser.uid],otherUser:pendingMatchUser});
+  }
+}
+
+/* ════════════ MATCHES LIST ════════════ */
+async function loadMatches(){
+  if(!CU)return;
+  document.getElementById('match-notif-dot').style.display='none';
+  const list=document.getElementById('matches-list');
+  list.innerHTML=`<div style="display:flex;justify-content:center;padding:40px;"><div style="width:30px;height:30px;border:2px solid rgba(6,182,212,.2);border-top-color:#06b6d4;border-radius:50%;" class="anim-spin"></div></div>`;
+  if(unsubMatches)unsubMatches();
+  unsubMatches=db.collection('matches').where('users','array-contains',CU.uid).onSnapshot(async snap=>{
+    const ms=await Promise.all(snap.docs.map(async d=>{
+      const data=d.data();
+      const otherUid=data.users.find(id=>id!==CU.uid);
+      try{const ou=await db.collection('users').doc(otherUid).get();return{...data,id:d.id,otherUser:ou.data()};}
+      catch(e){return{...data,id:d.id,otherUser:null};}
+    }));
+    matches=ms.filter(m=>m.otherUser);renderMatchesList();
+  });
+}
+function renderMatchesList(){
+  const list=document.getElementById('matches-list');
+  if(!matches.length){
+    list.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;text-align:center;opacity:.5;"><div style="font-size:44px;margin-bottom:14px;">💬</div><p style="font-weight:600;font-size:16px;">No matches yet</p><p style="font-size:13px;margin-top:5px;color:rgba(255,255,255,.4);">Keep swiping to find your match!</p></div>`;
+    return;
+  }
+  const grid=document.createElement('div');
+  grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:11px;';
+  matches.forEach(m=>{
+    const score=CUD?calcCompatScore(CUD,m.otherUser):null;
+    const wrap=document.createElement('div');wrap.style.cssText='position:relative;';
+    const btn=document.createElement('button');
+    btn.style.cssText='position:relative;width:100%;aspect-ratio:3/4;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.1);cursor:pointer;background:#111;text-align:left;padding:0;display:block;';
+    btn.innerHTML=`
+      <img src="${m.otherUser.photoURL||`https://ui-avatars.com/api/?name=${encodeURIComponent(m.otherUser.displayName||'?')}&background=06b6d4&color=000&size=400`}" style="width:100%;height:100%;object-fit:cover;" referrerpolicy="no-referrer">
+      <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.9),transparent 55%);"></div>
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:11px;">
+        <p style="font-weight:700;font-size:14px;">${m.otherUser.displayName||'?'}</p>
+        <div style="display:flex;align-items:center;gap:4px;margin-top:2px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:${m.otherUser.online?'#06b6d4':'#4b5563'};${m.otherUser.online?'box-shadow:0 0 5px #06b6d4;':''}"></div>
+          <span style="font-size:10px;color:rgba(255,255,255,.4);">${m.otherUser.online?'Online':'Offline'}</span>
+        </div>
+        ${score!==null?`<p style="font-size:9px;font-weight:700;margin-top:3px;color:${score>=70?'#22d3ee':score>=45?'#c084fc':'rgba(255,255,255,.3)'};">✦ ${score}% match</p>`:''}
+      </div>`;
+    btn.onclick=()=>openChatById(m.id);
+    wrap.appendChild(btn);grid.appendChild(wrap);
+  });
+  list.innerHTML='';list.appendChild(grid);
+}
+function openChatById(matchId){const m=matches.find(x=>x.id===matchId);if(m)openChat(m);}
+
+/* ════════════ CHAT ════════════ */
+function openChat(match){
+  activeMatch=match;
+  const other=match.otherUser;
+  document.getElementById('chat-name').textContent=other?.displayName||'?';
+  document.getElementById('chat-status').textContent=other?.online?'Online':'Offline';
+  document.getElementById('chat-online-dot').style.background=other?.online?'#06b6d4':'#4b5563';
+  document.getElementById('chat-online-dot').style.boxShadow=other?.online?'0 0 5px #06b6d4':'none';
+  const setAvEl=(id)=>{
+    const el=document.getElementById(id);el.innerHTML='';
+    if(other?.photoURL){const img=document.createElement('img');img.src=other.photoURL;img.referrerPolicy='no-referrer';img.style.cssText='width:100%;height:100%;object-fit:cover;';el.appendChild(img);}
+  };
+  setAvEl('chat-avatar');setAvEl('typing-avatar');
+  document.getElementById('spark-banner').style.display='none';
+  showView('chat');document.getElementById('bottom-nav').style.display='none';
+  subscribeMessages();subscribeTyping();checkSparkBanner();
+}
+function subscribeMessages(){
+  if(unsubMessages)unsubMessages();
+  const q=db.collection('matches').doc(activeMatch.id).collection('messages').orderBy('createdAt','asc').limit(100);
+  unsubMessages=q.onSnapshot(snap=>{activeMsgs=snap.docs.map(d=>({...d.data(),id:d.id}));renderMessages();});
+}
+function subscribeTyping(){
+  if(unsubTyping)unsubTyping();
+  unsubTyping=db.collection('matches').doc(activeMatch.id).onSnapshot(snap=>{
+    const data=snap.data();
+    const otherUid=activeMatch.users.find(id=>id!==CU.uid);
+    document.getElementById('typing-indicator').style.display=(data?.typing?.[otherUid])?'block':'none';
+    scrollMsgsBottom();
+  });
+}
+function renderMessages(){
+  const area=document.getElementById('messages-area');
+  if(!activeMsgs.length){
+    area.innerHTML=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;opacity:.5;gap:8px;"><div style="font-size:38px;">💬</div><p style="font-size:14px;">Say hi to <strong>${activeMatch.otherUser?.displayName||'them'}</strong>!</p></div>`;
+    return;
+  }
+  area.innerHTML='<div style="flex:1;min-height:20px;"></div>'+activeMsgs.map(msg=>{
+    const own=msg.senderUid===CU.uid;
+    const time=msg.createdAt?.toDate().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})||'';
+    let content='';
+    if(msg.gamePrompt){
+      content=`<div style="font-size:10px;color:rgba(168,85,247,.8);margin-bottom:4px;">🕵️ Two Truths & a Lie</div><div style="font-size:14px;line-height:1.5;">${msg.gamePrompt}</div>`;
+    } else if(msg.sparkQuestion){
+      content=`<div style="font-size:10px;color:#f59e0b;margin-bottom:4px;">⚡ Daily Spark</div><em style="font-size:14px;">${msg.sparkQuestion}</em>${msg.sparkAnswer?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.12);font-size:13px;">"${msg.sparkAnswer}"</div>`:''}`;
+    } else {
+      content=msg.text||'';
+    }
+    return `<div style="display:flex;flex-direction:column;max-width:78%;${own?'align-self:flex-end;align-items:flex-end;':'align-self:flex-start;align-items:flex-start;'}">
+      <div style="padding:10px 14px;border-radius:${own?'17px 17px 4px 17px':'17px 17px 17px 4px'};font-size:14px;line-height:1.5;${own?'background:#06b6d4;color:#000;':'background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.1);color:#fff;'}">${content}</div>
+      <div style="display:flex;align-items:center;gap:4px;margin-top:3px;padding:0 3px;">
+        <span style="font-size:10px;color:rgba(255,255,255,.28);">${time}</span>
+        ${own?'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2.5"><polyline points="17 1 9 15 1 8"/><polyline points="23 1 15 15 7 8"/></svg>':''}
+      </div>
+    </div>`;
+  }).join('');
+  scrollMsgsBottom();
+}
+function scrollMsgsBottom(){const a=document.getElementById('messages-area');setTimeout(()=>a.scrollTop=a.scrollHeight,50);}
+async function sendMessage(e){
+  e.preventDefault();
+  const input=document.getElementById('msg-input');
+  const text=input.value.trim();
+  if(!text||!activeMatch)return;
+  input.value='';
+  await setTypingStatus(false);
+  try{
+    await db.collection('matches').doc(activeMatch.id).collection('messages').add({matchId:activeMatch.id,senderUid:CU.uid,text,createdAt:FieldValue.serverTimestamp()});
+  }catch(e){showToast('Failed to send.');}
+}
+async function setTypingStatus(typing){
+  if(!activeMatch||!CU)return;
+  try{await db.collection('matches').doc(activeMatch.id).set({typing:{[CU.uid]:typing}},{merge:true});}catch(e){}
+}
+function handleTypingInput(){
+  setTypingStatus(true);clearTimeout(typingTimer);
+  typingTimer=setTimeout(()=>setTypingStatus(false),2000);
+}
+
+/* ════════════ ICE BREAKER — Two Truths & a Lie only ════════════ */
+function openGameModal(){
+  const c=document.getElementById('game-content');
+  c.innerHTML=`
+    <div style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.2);border-radius:14px;padding:16px 18px;margin-bottom:18px;">
+      <p style="font-size:14px;font-weight:600;line-height:1.6;color:rgba(255,255,255,.9);">Write two true statements and one lie about yourself. Send it to <strong>${activeMatch?.otherUser?.displayName||'your match'}</strong> — they have to guess which is the lie! 🕵️</p>
+    </div>
+    <textarea id="two-truths-input" class="inp" rows="5" placeholder="1. I've hiked three mountains.&#10;2. I speak two languages.&#10;3. I once slept in a treehouse for a week." style="resize:none;margin-bottom:14px;font-size:13px;line-height:1.6;"></textarea>
+    <button class="btn-primary" onclick="sendTwoTruths()">Send to ${activeMatch?.otherUser?.displayName||'them'} 🎮</button>`;
+  openModal('game-modal');
+}
+async function sendTwoTruths(){
+  const text=document.getElementById('two-truths-input')?.value.trim();
+  if(!text||!activeMatch||!CU)return showToast('Write your two truths and a lie first!');
+  closeModal('game-modal');
+  try{
+    await db.collection('matches').doc(activeMatch.id).collection('messages').add({
+      matchId:activeMatch.id,senderUid:CU.uid,text:'',
+      gamePrompt:text,gameName:'Two Truths & a Lie',
+      createdAt:FieldValue.serverTimestamp()
+    });
+    showToast('Game sent! 🕵️ Now wait for them to guess!');
+  }catch(e){showToast('Failed to send. Check Firestore rules.');}
+}
+
+/* ════════════ DAILY SPARK ════════════ */
+function getTodaySpark(){
+  const day=Math.floor(Date.now()/(1000*60*60*24));
+  return DAILY_SPARKS[day%DAILY_SPARKS.length];
+}
+async function checkSparkBanner(){
+  if(!activeMatch||!CU)return;
+  try{
+    const today=new Date().toDateString();
+    const snap=await db.collection('matches').doc(activeMatch.id).collection('messages')
+      .where('sparkQuestion','!=',null).orderBy('sparkQuestion').get();
+    const otherUid=activeMatch.users.find(id=>id!==CU.uid);
+    const theirSpark=snap.docs.find(d=>d.data().senderUid===otherUid&&d.data().sparkAnswer);
+    const mySpark=snap.docs.find(d=>d.data().senderUid===CU.uid&&d.data().sparkAnswer);
+    if(theirSpark&&!mySpark)document.getElementById('spark-banner').style.display='block';
+  }catch(e){}
+}
+async function openSparkModal(){
+  const spark=getTodaySpark();
+  const c=document.getElementById('spark-content');
+  // Check if we already answered today
+  let myAnswer='',theirAnswer='',theirName=activeMatch?.otherUser?.displayName||'them';
+  try{
+    const snap=await db.collection('matches').doc(activeMatch.id).collection('messages')
+      .orderBy('createdAt','desc').limit(50).get();
+    const otherUid=activeMatch.users.find(id=>id!==CU.uid);
+    const msgs=snap.docs.map(d=>d.data());
+    const theirMsg=msgs.find(m=>m.senderUid===otherUid&&m.sparkAnswer);
+    const myMsg=msgs.find(m=>m.senderUid===CU.uid&&m.sparkAnswer);
+    if(theirMsg)theirAnswer=theirMsg.sparkAnswer;
+    if(myMsg)myAnswer=myMsg.sparkAnswer;
+  }catch(e){}
+
+  c.innerHTML=`
+    <div style="background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,146,60,.08));border:1px solid rgba(245,158,11,.2);border-radius:14px;padding:16px;margin-bottom:18px;">
+      <p style="font-size:10px;color:#f59e0b;font-weight:700;margin-bottom:7px;letter-spacing:.08em;">TODAY'S SPARK ⚡</p>
+      <p style="font-size:15px;font-weight:600;line-height:1.5;">"${spark}"</p>
+    </div>
+    ${theirAnswer?`<div style="background:rgba(255,255,255,.06);border-radius:13px;padding:13px;margin-bottom:14px;"><p style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:5px;">${theirName}'s answer:</p><p style="font-size:14px;line-height:1.6;">"${theirAnswer}"</p></div>`:''}
+    ${myAnswer
+      ?`<div style="background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.2);border-radius:13px;padding:13px;"><p style="font-size:10px;color:#22d3ee;margin-bottom:5px;">Your answer:</p><p style="font-size:14px;line-height:1.6;">"${myAnswer}"</p></div>`
+      :`<textarea id="spark-input" class="inp" rows="4" placeholder="Your answer…" style="resize:none;margin-bottom:12px;"></textarea>
+       <button class="btn-gold" onclick="submitSparkAnswer('${spark.replace(/'/g,"\\'")}')">Share Your Spark ⚡</button>`}
+  `;
+  openModal('spark-modal');
+}
+async function submitSparkAnswer(question){
+  const answer=document.getElementById('spark-input')?.value.trim();
+  if(!answer)return showToast('Write your answer first!');
+  if(!activeMatch||!CU)return;
+  try{
+    // Send as a message in the match (covered by Firestore rules)
+    await db.collection('matches').doc(activeMatch.id).collection('messages').add({
+      matchId:activeMatch.id,
+      senderUid:CU.uid,
+      text:'',
+      sparkQuestion:question,
+      sparkAnswer:answer,
+      createdAt:FieldValue.serverTimestamp()
+    });
+    closeModal('spark-modal');
+    document.getElementById('spark-banner').style.display='none';
+    showToast('Spark shared! ⚡');
+  }catch(e){
+    console.error('Spark error:',e);
+    showToast('Failed to share. Check Firestore rules.');
+  }
+}
+
+/* ════════════ EXPLORE ════════════ */
+function renderExploreGrid(){
+  const grid=document.getElementById('explore-grid');
+  grid.innerHTML='';
+  if(!feed.length){
+    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px;opacity:.4;font-size:14px;">No profiles to explore yet.</div>`;
+    return;
+  }
+  feed.forEach(user=>{
+    const score=CUD?calcCompatScore(CUD,user):null;
+    const card=document.createElement('div');
+    card.style.cssText='position:relative;aspect-ratio:2/3;border-radius:16px;overflow:hidden;background:#111;cursor:pointer;border:1px solid rgba(255,255,255,.07);';
+    card.innerHTML=`
+      <img src="${user.photoURL||`https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName||'?')}&background=06b6d4&color=000&size=400`}" style="width:100%;height:100%;object-fit:cover;" referrerpolicy="no-referrer">
+      <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.9),transparent 50%);"></div>
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:9px;">
+        <p style="font-weight:700;font-size:13px;">${user.displayName||'?'}, ${user.age||'?'}</p>
+        <p style="font-size:10px;color:rgba(255,255,255,.4);">${user.location||''}</p>
+        ${score!==null?`<p style="font-size:9px;font-weight:700;margin-top:2px;color:${score>=70?'#22d3ee':score>=45?'#c084fc':'rgba(255,255,255,.3)'};">✦ ${score}% match</p>`:''}
+      </div>
+      ${user.online?'<div style="position:absolute;top:9px;right:9px;width:8px;height:8px;border-radius:50%;background:#06b6d4;box-shadow:0 0 5px #06b6d4;border:2px solid #000;"></div>':''}`;
+    card.onclick=()=>showUserProfile(user);
+    grid.appendChild(card);
+  });
+}
+
+/* ════════════ USER PROFILE PREVIEW ════════════ */
+function showUserProfile(user){
+  const score=CUD?calcCompatScore(CUD,user):null;
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.97);overflow-y:auto;';
+  const tags=(user.interests||[]).map(i=>`<span style="padding:5px 12px;border-radius:100px;background:rgba(6,182,212,.12);border:1px solid rgba(6,182,212,.25);font-size:12px;color:#22d3ee;">${i}</span>`).join('');
+  modal.innerHTML=`
+    <div style="max-width:430px;margin:0 auto;">
+      <div style="position:relative;height:340px;flex-shrink:0;">
+        <img src="${user.photoURL||`https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName||'?')}&background=06b6d4&color=000&size=400`}" style="width:100%;height:100%;object-fit:cover;" referrerpolicy="no-referrer">
+        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.9),transparent 50%);"></div>
+        <button onclick="this.closest('[style*=fixed]').remove()" style="position:absolute;top:16px;left:16px;width:34px;height:34px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.15);border-radius:50%;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+        <div style="position:absolute;bottom:18px;left:18px;">
+          <h2 style="font-size:26px;font-weight:800;">${user.displayName||'?'}, ${user.age||'?'}</h2>
+          <p style="color:rgba(255,255,255,.55);font-size:13px;">${user.location||''}</p>
+        </div>
+      </div>
+      <div style="padding:22px;">
+        ${score!==null?`<div style="margin-bottom:14px;">${compatBadge(score)}</div>`:''}
+        ${user.promptQuestion&&user.promptAnswer?`<div style="background:rgba(255,255,255,.06);border-radius:13px;padding:13px;margin-bottom:14px;"><p style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:5px;">${user.promptQuestion}</p><p style="font-size:14px;font-style:italic;">"${user.promptAnswer}"</p></div>`:''}
+        <p style="color:rgba(255,255,255,.7);font-size:14px;line-height:1.7;margin-bottom:14px;">${user.bio||''}</p>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:22px;">${tags}</div>
+        <div style="display:flex;gap:11px;">
+          <button onclick="this.closest('[style*=fixed]').remove()" class="btn-outline" style="flex:1;padding:13px;">Skip</button>
+          <button onclick="doLikeUser('${user.uid}',this)" class="btn-primary" style="flex:1;padding:13px;">Like ❤️</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+async function doLikeUser(uid,btn){
+  if(btn){btn.textContent='Liked ❤️';btn.disabled=true;}
+  const user=feed.find(u=>u.uid===uid);
+  if(!user||!CU){showToast('Liked! ❤️');return;}
+  try{
+    await db.collection('likes').doc(`${CU.uid}_${uid}`).set({fromUid:CU.uid,toUid:uid,createdAt:FieldValue.serverTimestamp()});
+    const mutual=await db.collection('likes').doc(`${uid}_${CU.uid}`).get();
+    if(mutual.exists){
+      const matchId=[CU.uid,uid].sort().join('_');
+      await db.collection('matches').doc(matchId).set({users:[CU.uid,uid],createdAt:FieldValue.serverTimestamp()},{merge:true});
+      document.querySelector('[style*=fixed]')?.remove();
+      pendingMatchUser=user;showMatchModal(user);
+    } else {showToast(`Liked ${user.displayName}! ❤️`);}
+  }catch(e){showToast('Like failed.');}
+}
+
+/* ════════════ MY PROFILE ════════════ */
+function renderMyProfile(){
+  if(!CUD)return;
+  const cover=document.getElementById('myprofile-cover');
+  if(CUD.photoURL){cover.style.backgroundImage=`url(${CUD.photoURL})`;cover.style.backgroundSize='cover';cover.style.backgroundPosition='center';}
+  const av=document.getElementById('myprofile-avatar');av.innerHTML='';
+  if(CUD.photoURL){const img=document.createElement('img');img.src=CUD.photoURL;img.style.cssText='width:100%;height:100%;object-fit:cover;';av.appendChild(img);}
+  document.getElementById('myprofile-name').textContent=`${CUD.displayName||'?'}, ${CUD.age||'?'}`;
+  document.getElementById('myprofile-meta').textContent=`${CUD.gender||''} · ${CUD.location||''}`;
+  document.getElementById('myprofile-bio').textContent=CUD.bio||'';
+  const pEl=document.getElementById('myprofile-prompt');
+  pEl.innerHTML=CUD.promptQuestion&&CUD.promptAnswer
+    ?`<div style="background:rgba(255,255,255,.06);border-radius:13px;padding:13px;"><p style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:5px;">${CUD.promptQuestion}</p><p style="font-size:14px;font-style:italic;color:rgba(255,255,255,.8);">"${CUD.promptAnswer}"</p></div>`:'';
+  document.getElementById('myprofile-interests').innerHTML=(CUD.interests||[]).map(i=>`<span style="padding:5px 13px;border-radius:100px;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.25);font-size:12px;color:#22d3ee;">${i}</span>`).join('');
+}
+
+/* ════════════ INIT ════════════ */
+document.addEventListener('DOMContentLoaded',()=>{renderInterestsGrid();renderQuiz();});
+</script>
+</body>
+</html>
