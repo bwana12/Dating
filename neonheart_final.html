@@ -1,0 +1,1866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NeonHeart — Find Your Frequency</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{font-family:'Inter',sans-serif;box-sizing:border-box;}
+html,body{margin:0;padding:0;background:#0d0810;color:#fff;height:100%;}
+body{overflow:hidden;}
+#app{height:100vh;height:100dvh;display:flex;flex-direction:column;position:relative;}
+
+/* ── ANIMATED BG CANVAS ── */
+#bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none;}
+
+/* ── SAFE AREAS ── */
+.safe-top{padding-top:env(safe-area-inset-top,0);}
+.safe-bot{padding-bottom:env(safe-area-inset-bottom,10px);}
+
+.scroll-area{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.scroll-area::-webkit-scrollbar{width:0;}
+select{background-image:none!important;}
+select option{background:#1a0d1e;color:#fff;}
+
+.drag-card{touch-action:pan-y;cursor:grab;user-select:none;}
+.drag-card:active{cursor:grabbing;}
+
+/* ── KEYFRAMES ── */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes bounce-heart{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-8px) scale(1.08)}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes fade-up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes blink{0%,100%{opacity:.15}50%{opacity:1}}
+@keyframes pop{0%{transform:scale(0) rotate(-12deg);opacity:0}65%{transform:scale(1.15) rotate(2deg)}100%{transform:scale(1) rotate(0);opacity:1}}
+@keyframes slide-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes glow-pulse{0%,100%{box-shadow:0 0 20px rgba(233,93,139,.3)}50%{box-shadow:0 0 40px rgba(233,93,139,.6)}}
+@keyframes streak-pop{0%{transform:scale(1)}40%{transform:scale(1.4)}100%{transform:scale(1)}}
+@keyframes loader-fadeout{0%{opacity:1;visibility:visible;pointer-events:auto}99%{opacity:0;visibility:visible;pointer-events:none}100%{opacity:0;visibility:hidden;pointer-events:none}}
+.loader-hiding{animation:loader-fadeout .7s ease forwards!important;pointer-events:none!important;}
+
+@keyframes notif-out{from{transform:translateY(0);opacity:1}to{transform:translateY(-70px);opacity:0}}
+@keyframes notif-in{from{transform:translateY(-70px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+.anim-fade-up{animation:fade-up .4s ease forwards;}
+.anim-spin{animation:spin .8s linear infinite;}
+.anim-bounce{animation:bounce-heart 1.2s ease infinite;}
+.anim-float{animation:float 3.5s ease infinite;}
+.anim-pop{animation:pop .5s cubic-bezier(.34,1.56,.64,1) forwards;}
+.anim-glow{animation:glow-pulse 2s ease infinite;}
+
+/* ── GLASS ── */
+.glass{background:rgba(255,255,255,.06);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1px solid rgba(255,255,255,.1);}
+.glass-dark{background:rgba(10,4,14,.7);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border-top:1px solid rgba(255,255,255,.07);}
+
+/* ── VIEWS ── */
+.view{display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;position:relative;z-index:1;}
+.view.active{display:flex;}
+.modal{position:fixed;inset:0;z-index:200;display:none;align-items:flex-end;justify-content:center;}
+.modal.open{display:flex;}
+.modal-sheet{width:100%;max-width:430px;border-radius:28px 28px 0 0;animation:slide-up .38s cubic-bezier(.34,1.56,.64,1);}
+
+/* ── SWIPE CARDS ── */
+.swipe-card{position:absolute;inset:0;border-radius:24px;overflow:hidden;}
+.swipe-card:nth-child(3){transform:scale(.93) translateY(14px);z-index:0;filter:brightness(.75);}
+.swipe-card:nth-child(2){transform:scale(.965) translateY(7px);z-index:1;filter:brightness(.88);}
+.swipe-card:last-child{z-index:2;filter:none;}
+.stamp-like{position:absolute;top:26px;left:18px;border:4px solid #4ade80;color:#4ade80;padding:5px 14px;border-radius:10px;font-size:25px;font-weight:900;transform:rotate(-20deg);opacity:0;transition:opacity .1s;z-index:10;pointer-events:none;}
+.stamp-nope{position:absolute;top:26px;right:18px;border:4px solid #f87171;color:#f87171;padding:5px 14px;border-radius:10px;font-size:25px;font-weight:900;transform:rotate(20deg);opacity:0;transition:opacity .1s;z-index:10;pointer-events:none;}
+.stamp-super{position:absolute;bottom:145px;left:50%;transform:translateX(-50%);border:4px solid #fbbf24;color:#fbbf24;padding:5px 16px;border-radius:10px;font-size:21px;font-weight:900;opacity:0;transition:opacity .12s;z-index:10;pointer-events:none;}
+
+/* ── INPUTS ── */
+.inp{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:13px 18px;color:#fff;font-size:15px;outline:none;transition:border-color .2s;}
+.inp::placeholder{color:rgba(255,255,255,.28);}
+.inp:focus{border-color:#e95d8b;}
+
+/* ── TYPING DOTS ── */
+.tdot{width:6px;height:6px;background:rgba(255,255,255,.4);border-radius:50%;display:inline-block;margin:0 2px;}
+.tdot:nth-child(1){animation:blink 1.2s infinite 0s}
+.tdot:nth-child(2){animation:blink 1.2s infinite .2s}
+.tdot:nth-child(3){animation:blink 1.2s infinite .4s}
+
+/* ── NAV ── */
+.nav-btn.active{color:#e95d8b;}
+.nav-btn.active svg{fill:rgba(233,93,139,.15);}
+
+/* ── COMPAT BADGES ── */
+.cb{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:100px;font-size:11px;font-weight:700;border:1px solid;}
+.cb-hi{background:rgba(74,222,128,.12);border-color:rgba(74,222,128,.4);color:#4ade80;}
+.cb-mid{background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.4);color:#fbbf24;}
+.cb-lo{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:rgba(255,255,255,.45);}
+
+/* ── STATUS PILL ── */
+.status-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:100px;font-size:11px;font-weight:600;border:1px solid;cursor:pointer;}
+
+/* ── QUIZ OPTION ── */
+.quiz-opt{width:100%;padding:12px 16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:13px;color:#fff;font-size:14px;cursor:pointer;text-align:left;transition:all .2s;margin-bottom:10px;}
+.quiz-opt:hover{background:rgba(233,93,139,.1);border-color:rgba(233,93,139,.3);}
+.quiz-opt.selected{background:rgba(233,93,139,.2);border-color:#e95d8b;color:#ffb3c8;}
+
+/* ── STREAK BADGE ── */
+.streak-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:100px;background:linear-gradient(135deg,rgba(251,191,36,.2),rgba(251,146,60,.2));border:1px solid rgba(251,191,36,.35);font-size:12px;font-weight:700;color:#fbbf24;}
+
+/* ── BUTTONS ── */
+.btn-p{width:100%;padding:15px;background:linear-gradient(135deg,#e95d8b,#c0395f);color:#fff;font-weight:800;font-size:15px;border:none;border-radius:100px;cursor:pointer;transition:transform .2s,box-shadow .2s;box-shadow:0 0 22px rgba(233,93,139,.45);}
+.btn-p:hover{transform:translateY(-1px);box-shadow:0 0 32px rgba(233,93,139,.6);}
+.btn-p:active{transform:scale(.97);}
+.btn-g{width:100%;padding:15px;background:linear-gradient(135deg,#e8b84b,#d97706);color:#000;font-weight:800;font-size:15px;border:none;border-radius:100px;cursor:pointer;box-shadow:0 0 18px rgba(232,184,75,.3);}
+.btn-o{width:100%;padding:15px;background:transparent;color:#fff;font-weight:700;font-size:15px;border:1px solid rgba(255,255,255,.2);border-radius:100px;cursor:pointer;transition:background .2s;}
+.btn-o:hover{background:rgba(255,255,255,.08);}
+.btn-o:active{transform:scale(.97);}
+
+/* ── NOTIF BANNER ── */
+.notif-banner{position:fixed;top:0;left:50%;transform:translateX(-50%);max-width:430px;width:100%;z-index:900;pointer-events:none;}
+.notif-item{margin:10px 14px 0;padding:14px 18px;border-radius:18px;background:rgba(20,10,26,.92);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(20px);display:flex;align-items:center;gap:12px;pointer-events:all;animation:notif-in .4s cubic-bezier(.34,1.56,.64,1) forwards;}
+.notif-item.out{animation:notif-out .35s ease forwards;}
+
+/* ── VERIFICATION BADGE ── */
+.verified{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;background:#e95d8b;border-radius:50%;flex-shrink:0;}
+
+/* ── PRIVACY POLICY FIX ── */
+#page-privacy{overflow-y:auto!important;}
+#page-privacy .priv-inner{max-width:430px;width:100%;margin:0 auto;padding:max(44px,env(safe-area-inset-top,14px)) 20px max(60px,env(safe-area-inset-bottom,20px));box-sizing:border-box;}
+#page-privacy .priv-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:18px;margin-bottom:11px;word-break:break-word;}
+#page-privacy .priv-card p{font-size:13px;color:rgba(255,255,255,.55);line-height:1.7;margin:0;word-wrap:break-word;}
+
+/* ── MY PROFILE RESPONSIVE ── */
+#view-myprofile{overflow-y:auto!important;overflow-x:hidden;-webkit-overflow-scrolling:touch;}
+#view-myprofile .mp-cover{position:relative;height:min(210px,40vw);min-height:160px;flex-shrink:0;}
+#view-myprofile .mp-body{padding:42px 16px 0;padding-bottom:max(20px,env(safe-area-inset-bottom,20px));}
+@media(max-width:380px){
+  #view-myprofile .mp-body{padding:38px 13px 0;}
+}
+
+/* ── BACK BUTTON IN EDIT PROFILE ── */
+.edit-profile-back{display:flex;align-items:center;gap:6px;padding:11px 16px;color:rgba(255,255,255,.5);background:none;border:none;cursor:pointer;font-size:14px;font-weight:600;flex-shrink:0;}
+.edit-profile-back:hover{color:#fff;}
+.edit-profile-back svg{flex-shrink:0;}
+
+/* ── CHAT MEDIA MESSAGES ── */
+.msg-media-img{max-width:200px;border-radius:12px;cursor:pointer;display:block;}
+.msg-media-vid{max-width:220px;border-radius:12px;display:block;}
+.msg-media-del{font-size:10px;color:rgba(255,255,255,.3);font-style:italic;padding:6px 10px;}
+.chat-attach-btn{width:34px;height:34px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:50%;color:rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .2s;}
+.chat-attach-btn:hover{background:rgba(233,93,139,.15);border-color:rgba(233,93,139,.4);color:#f9a8c9;}
+
+/* ── DELETE MSG BUTTON ── */
+.msg-delete-btn{display:none;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.2);border-radius:100px;padding:2px 7px;font-size:10px;color:#f87171;cursor:pointer;margin-top:2px;}
+.msg-wrap:hover .msg-delete-btn{display:inline-flex;align-items:center;gap:3px;}
+
+/* ── REMOVE MATCH BUTTON ── */
+.remove-match-btn{position:absolute;top:6px;right:6px;width:22px;height:22px;background:rgba(13,8,16,.7);border:1px solid rgba(248,113,113,.3);border-radius:50%;color:#f87171;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;opacity:0;transition:opacity .2s;}
+.match-wrap:hover .remove-match-btn{opacity:1;}
+
+/* ── SAFE AREA FIXES ── */
+.safe-top-pad{padding-top:max(14px,env(safe-area-inset-top,14px));}
+.safe-bot-pad{padding-bottom:max(10px,env(safe-area-inset-bottom,10px));}
+
+/* ── REPORT MODAL REASON SELECT ── */
+#report-reason-select{width:100%;margin-top:10px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:10px 14px;color:#fff;font-size:14px;outline:none;}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ═══ ANIMATED BACKGROUND CANVAS ═══ -->
+<canvas id="bg-canvas"></canvas>
+
+<!-- ═══ NOTIFICATION BANNER ═══ -->
+<div class="notif-banner" id="notif-banner"></div>
+
+<!-- ═══ VIDEO SPLASH ═══ -->
+<div id="loader" style="position:fixed;inset:0;z-index:500;overflow:hidden;background:#0d0810;">
+  <!-- Fullscreen video — no loop, plays once then JS hides it -->
+  <video id="loader-video" autoplay muted playsinline
+    style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;">
+    <source src="https://cdn.coverr.co/videos/coverr-couple-walking-at-sunset-2128/1080p.mp4" type="video/mp4">
+  </video>
+  <!-- Subtle vignette -->
+  <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(13,8,16,.75) 0%,transparent 40%,rgba(13,8,16,.2) 100%);z-index:1;pointer-events:none;"></div>
+  <!-- App name pinned to bottom -->
+  <div style="position:absolute;bottom:0;left:0;right:0;z-index:2;padding:0 0 max(48px,env(safe-area-inset-bottom,48px));display:flex;flex-direction:column;align-items:center;gap:6px;">
+    <p style="font-size:28px;font-weight:900;letter-spacing:.14em;background:linear-gradient(135deg,#f9a8c9,#e95d8b,#c0395f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">NEONHEART</p>
+    <p style="color:rgba(255,255,255,.5);font-size:11px;letter-spacing:.2em;font-weight:500;">FIND YOUR FREQUENCY</p>
+  </div>
+</div>
+
+<!-- ═══ TOAST ═══ -->
+<div id="toast" style="position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-90px);background:#1a0d1e;border:1px solid rgba(255,255,255,.14);border-radius:100px;padding:10px 22px;font-size:14px;z-index:800;transition:transform .4s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;pointer-events:none;max-width:90vw;text-align:center;"></div>
+
+<div style="position:relative;z-index:1;max-width:430px;width:100%;margin:0 auto;flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;">
+
+<!-- ════════════════════════════════════
+     LANDING
+════════════════════════════════════ -->
+<div id="view-landing" class="view active scroll-area" style="align-items:center;justify-content:center;padding:44px 28px 60px;text-align:center;">
+  <div class="anim-fade-up" style="width:100%;">
+    <div style="width:90px;height:90px;background:linear-gradient(135deg,#e95d8b,#c0395f);border-radius:26px;display:flex;align-items:center;justify-content:center;margin:0 auto 22px;box-shadow:0 0 44px rgba(233,93,139,.45);" class="anim-float anim-glow">
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="white"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+    </div>
+    <h1 style="font-size:40px;font-weight:900;letter-spacing:-2px;background:linear-gradient(135deg,#f9a8c9,#e95d8b,#c0395f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:10px;">NEON HEART</h1>
+    <p style="color:rgba(255,255,255,.45);font-size:15px;max-width:270px;margin:0 auto 16px;line-height:1.7;">Find your futuristic match. Smarter. Deeper. More human.</p>
+    <div style="display:flex;justify-content:center;gap:8px;margin-bottom:36px;flex-wrap:wrap;">
+      <span style="font-size:11px;color:#f9a8c9;background:rgba(233,93,139,.1);border:1px solid rgba(233,93,139,.25);padding:4px 10px;border-radius:100px;">✦ Vibe Matching</span>
+      <span style="font-size:11px;color:#fbbf24;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);padding:4px 10px;border-radius:100px;">✦ Daily Sparks</span>
+      <span style="font-size:11px;color:#a78bfa;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);padding:4px 10px;border-radius:100px;">✦ Streak Rewards</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:13px;width:100%;max-width:320px;margin:0 auto 32px;">
+      <button class="btn-p" onclick="showAuth('signup')">Create Account ✦</button>
+      <button class="btn-o" onclick="showAuth('login')">Sign In</button>
+    </div>
+    <div style="display:flex;gap:16px;justify-content:center;">
+      <button onclick="openPage('about')" style="background:none;border:none;color:rgba(255,255,255,.35);font-size:13px;cursor:pointer;text-decoration:underline;">About Us</button>
+      <button onclick="openPage('privacy')" style="background:none;border:none;color:rgba(255,255,255,.35);font-size:13px;cursor:pointer;text-decoration:underline;">Privacy Policy</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     AUTH
+════════════════════════════════════ -->
+<div id="view-auth" class="view scroll-area" style="padding:28px 26px 60px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
+    <button onclick="showView('landing')" style="color:rgba(255,255,255,.45);display:flex;align-items:center;gap:5px;font-size:14px;background:none;border:none;cursor:pointer;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Back
+    </button>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="#e95d8b"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+      <span style="font-size:13px;font-weight:900;letter-spacing:.08em;background:linear-gradient(135deg,#f9a8c9,#e95d8b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">NEONHEART</span>
+    </div>
+  </div>
+  <h2 id="auth-title" style="font-size:28px;font-weight:800;margin-bottom:22px;">Welcome Back</h2>
+  <div id="auth-error" style="display:none;padding:11px 15px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);border-radius:12px;color:#f87171;font-size:13px;margin-bottom:14px;"></div>
+  <form id="auth-form" onsubmit="handleAuth(event)" style="display:flex;flex-direction:column;gap:16px;">
+    <div>
+      <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Email</label>
+      <input name="email" type="email" required class="inp" placeholder="name@example.com" autocomplete="email">
+    </div>
+    <div>
+      <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Password</label>
+      <input name="password" type="password" required class="inp" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button type="submit" id="auth-submit" class="btn-p" style="margin-top:6px;">Sign In</button>
+  </form>
+  <p style="text-align:center;color:rgba(255,255,255,.38);margin-top:20px;font-size:14px;">
+    <span id="auth-sw-txt">Don't have an account?</span>
+    <button id="auth-sw-btn" onclick="toggleAuthMode()" style="color:#f9a8c9;font-weight:700;background:none;border:none;cursor:pointer;margin-left:5px;">Sign Up</button>
+  </p>
+</div>
+
+<!-- ════════════════════════════════════
+     PROFILE SETUP
+════════════════════════════════════ -->
+<div id="view-profile" class="view" style="padding:0;">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px 14px;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,.06);">
+    <!-- Back button — only shown when editing existing profile -->
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button id="edit-profile-back-btn" onclick="cancelEditProfile()" style="display:none;width:32px;height:32px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:50%;color:rgba(255,255,255,.6);cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2 style="font-size:24px;font-weight:800;" id="profile-setup-title">Profile Setup</h2>
+    </div>
+    <span id="setup-lbl" style="color:#e95d8b;font-family:monospace;font-size:13px;">Step 1/4</span>
+  </div>
+  <div class="scroll-area" style="flex:1;padding:18px 22px;min-height:0;">
+    <!-- Step 1 -->
+    <div id="step-1" style="display:flex;flex-direction:column;gap:16px;padding-bottom:16px;">
+      <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:4px;">
+        <div style="position:relative;" onclick="document.getElementById('photo-inp').click()">
+          <div id="av-prev" style="width:108px;height:108px;border-radius:50%;border:2px solid rgba(233,93,139,.5);background:rgba(255,255,255,.05);overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0112 0v2"/></svg>
+          </div>
+          <div style="position:absolute;bottom:2px;right:2px;width:30px;height:30px;background:#e95d8b;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 10px rgba(233,93,139,.5);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          </div>
+          <input type="file" id="photo-inp" accept="image/*" style="display:none;" onchange="handlePhotoUpload(this)">
+        </div>
+        <p style="color:rgba(255,255,255,.3);font-size:12px;margin-top:7px;">Tap to upload photo</p>
+      </div>
+      <div><label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Display Name</label><input id="s-name" class="inp" placeholder="Your name"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Age</label><input id="s-age" type="number" min="18" max="99" class="inp" placeholder="25"></div>
+        <div><label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Gender</label>
+          <select id="s-gender" class="inp" style="appearance:none;"><option value="male">Male</option><option value="female">Female</option><option value="non-binary">Non-Binary</option><option value="other">Other</option></select>
+        </div>
+      </div>
+    </div>
+    <!-- Step 2 -->
+    <div id="step-2" style="display:none;flex-direction:column;gap:16px;padding-bottom:16px;">
+      <div><label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Bio</label><textarea id="s-bio" class="inp" rows="4" placeholder="Tell the future about yourself..." style="resize:none;"></textarea></div>
+      <div><label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Location</label><input id="s-loc" class="inp" placeholder="Neo Tokyo, Night City..."></div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:7px;">Profile Prompt</label>
+        <select id="s-pq" class="inp" style="appearance:none;margin-bottom:9px;"><option value="Two truths and a lie…">Two truths and a lie…</option><option value="My happy place is…">My happy place is…</option><option value="The way to my heart is…">The way to my heart is…</option><option value="I'm weirdly obsessed with…">I'm weirdly obsessed with…</option><option value="On weekends you'll find me…">On weekends you'll find me…</option><option value="My love language is…">My love language is…</option></select>
+        <textarea id="s-pa" class="inp" rows="2" placeholder="Your answer..." style="resize:none;"></textarea>
+      </div>
+    </div>
+    <!-- Step 3: Interests -->
+    <div id="step-3" style="display:none;padding-bottom:16px;">
+      <p style="color:rgba(255,255,255,.45);font-size:14px;margin-bottom:16px;">Pick your interests for smarter matches</p>
+      <div id="interests-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+    <!-- Step 4: Quiz -->
+    <div id="step-4" style="display:none;padding-bottom:16px;">
+      <p style="color:rgba(255,255,255,.45);font-size:14px;margin-bottom:3px;">Quick vibe check — 4 questions</p>
+      <p style="color:rgba(255,255,255,.25);font-size:12px;margin-bottom:18px;">Used for your compatibility score</p>
+      <div id="quiz-container"></div>
+    </div>
+  </div>
+  <div style="padding:12px 22px;border-top:1px solid rgba(255,255,255,.06);display:flex;gap:11px;flex-shrink:0;" class="safe-bot">
+    <button id="setup-back" onclick="setupPrev()" class="btn-o" style="flex:1;display:none;padding:13px;">Back</button>
+    <button id="setup-next" onclick="setupNext()" class="btn-p" style="flex:1;padding:13px;">Continue</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     DASHBOARD
+════════════════════════════════════ -->
+<div id="view-dashboard" class="view" style="padding:0;overflow:hidden;">
+  <header style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;flex-shrink:0;">
+    <div style="display:flex;align-items:center;gap:7px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="#e95d8b"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+      <span style="font-size:17px;font-weight:900;letter-spacing:-.5px;">NEON</span>
+      <div id="streak-display" style="display:none;" class="streak-badge">🔥 <span id="streak-count">0</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div id="likes-left-badge" style="height:30px;padding:0 11px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:100px;color:#fbbf24;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px;">
+        ❤️ <span id="likes-left-count">20</span>
+      </div>
+      <button onclick="handleSignOut()" style="width:30px;height:30px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:50%;color:rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+      </button>
+    </div>
+  </header>
+  <div style="flex:1;padding:0 13px 7px;display:flex;flex-direction:column;min-height:0;overflow:hidden;">
+    <div id="card-stack" style="position:relative;flex:1;min-height:0;"></div>
+    <div id="no-profiles" style="display:none;flex:1;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px;">
+      <div style="font-size:48px;margin-bottom:14px;" class="anim-float">✨</div>
+      <h3 style="font-size:20px;font-weight:700;margin-bottom:7px;">You're all caught up!</h3>
+      <p style="color:rgba(255,255,255,.38);font-size:14px;margin-bottom:20px;">New profiles appear daily. Come back tomorrow!</p>
+      <button class="btn-o" style="width:auto;padding:11px 26px;" onclick="reloadFeed()">Refresh</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     MATCHES
+════════════════════════════════════ -->
+<div id="view-matches" class="view" style="padding:0;">
+  <div style="padding:16px 20px 8px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+    <h2 style="font-size:24px;font-weight:800;">Matches</h2>
+    <div id="who-liked-btn" style="display:none;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.28);border-radius:100px;padding:5px 12px;cursor:pointer;" onclick="showToast('🔮 Premium: see who liked you — coming soon!',3000)">
+      <span id="who-liked-count" style="font-size:11px;color:#a78bfa;font-weight:700;">👀 liked you</span>
+    </div>
+  </div>
+  <div id="matches-list" class="scroll-area" style="flex:1;padding:0 13px 14px;"></div>
+</div>
+
+<!-- ════════════════════════════════════
+     CHAT
+════════════════════════════════════ -->
+<div id="view-chat" class="view" style="padding:0;">
+  <div class="glass-dark" style="padding:10px 13px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+    <div style="display:flex;align-items:center;gap:9px;">
+      <button onclick="backFromChat()" style="width:30px;height:30px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:50%;color:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div style="position:relative;">
+        <div id="chat-av" style="width:36px;height:36px;border-radius:50%;overflow:hidden;background:rgba(255,255,255,.08);"></div>
+        <div id="chat-dot" style="position:absolute;bottom:1px;right:1px;width:8px;height:8px;border-radius:50%;border:2px solid #0d0810;background:#4b5563;"></div>
+      </div>
+      <div style="overflow:hidden;">
+        <p id="chat-name" style="font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></p>
+        <p id="chat-status" style="font-size:10px;color:#6b7280;margin-top:1px;"></p>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0;">
+      <button onclick="openSparkModal()" style="width:30px;height:30px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);border-radius:50%;color:#fbbf24;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Daily Spark">⚡</button>
+      <button onclick="openGameModal()" style="width:30px;height:30px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);border-radius:50%;color:#a78bfa;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Ice Breaker">🕵️</button>
+      <button onclick="openReportModal()" style="width:30px;height:30px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:50%;color:#f87171;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Report/Block">🛡</button>
+    </div>
+  </div>
+  <div id="spark-banner" style="display:none;background:linear-gradient(135deg,rgba(251,191,36,.14),rgba(251,146,60,.07));border-bottom:1px solid rgba(251,191,36,.18);padding:8px 14px;cursor:pointer;flex-shrink:0;" onclick="openSparkModal()">
+    <p style="font-size:12px;color:#fbbf24;font-weight:700;">⚡ They answered today's Spark — tap to see!</p>
+  </div>
+  <div id="messages-area" class="scroll-area" style="flex:1;padding:12px;display:flex;flex-direction:column;gap:9px;"></div>
+  <div id="typing-indicator" style="display:none;padding:3px 16px;flex-shrink:0;">
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div id="typ-av" style="width:20px;height:20px;border-radius:50%;overflow:hidden;background:rgba(255,255,255,.07);flex-shrink:0;"></div>
+      <div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:14px 14px 14px 4px;padding:8px 12px;display:flex;gap:3px;align-items:center;">
+        <div class="tdot"></div><div class="tdot"></div><div class="tdot"></div>
+      </div>
+    </div>
+  </div>
+  <div class="glass-dark" style="padding:9px 12px;flex-shrink:0;padding-bottom:max(9px,env(safe-area-inset-bottom,9px));">
+    <form id="chat-form" onsubmit="sendMessage(event)" style="display:flex;align-items:center;gap:7px;">
+      <!-- Media upload button -->
+      <label class="chat-attach-btn" title="Send image/video">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <input type="file" id="media-file-inp" accept="image/*,video/*" style="display:none;" onchange="sendMediaMessage(this)">
+      </label>
+      <input id="msg-inp" class="inp" placeholder="Type a message…" autocomplete="off" oninput="handleTypingInput()" style="flex:1;padding:10px 14px;">
+      <button type="submit" style="width:38px;height:38px;background:linear-gradient(135deg,#e95d8b,#c0395f);border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 14px rgba(233,93,139,.4);">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     EXPLORE
+════════════════════════════════════ -->
+<div id="view-explore" class="view" style="padding:0;">
+  <div style="padding:16px 20px 10px;flex-shrink:0;">
+    <h2 style="font-size:24px;font-weight:800;">Explore</h2>
+    <p style="color:rgba(255,255,255,.38);font-size:13px;margin-top:2px;">Browse without swiping</p>
+  </div>
+  <div id="explore-grid" class="scroll-area" style="flex:1;padding:0 13px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start;"></div>
+</div>
+
+<!-- ════════════════════════════════════
+     MY PROFILE
+════════════════════════════════════ -->
+<div id="view-myprofile" class="view" style="padding:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;">
+  <div class="mp-cover" style="position:relative;flex-shrink:0;height:min(210px,40vw);min-height:160px;">
+    <div id="mpc" style="width:100%;height:100%;background:linear-gradient(135deg,#e95d8b,#c0395f);"></div>
+    <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(13,8,16,.95),transparent 55%);"></div>
+    <div style="position:absolute;bottom:-34px;left:18px;">
+      <div id="mp-av" style="width:72px;height:72px;border-radius:50%;border:4px solid #0d0810;overflow:hidden;background:#1a0d1e;"></div>
+    </div>
+  </div>
+  <div class="mp-body">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:5px;flex-wrap:wrap;gap:8px;">
+      <div style="flex:1;min-width:0;">
+        <div id="mp-name" style="font-size:21px;font-weight:800;display:flex;align-items:center;gap:6px;flex-wrap:wrap;"></div>
+        <div id="mp-meta" style="color:rgba(255,255,255,.45);font-size:13px;margin-top:2px;word-break:break-word;"></div>
+      </div>
+      <div id="mp-streak" style="display:none;" class="streak-badge" style="margin-top:4px;flex-shrink:0;">🔥 <span id="mp-streak-num">0</span> day streak</div>
+    </div>
+    <div id="mp-status-display" style="margin:10px 0;"></div>
+    <div id="mp-bio" style="color:rgba(255,255,255,.65);font-size:14px;line-height:1.65;margin-top:10px;word-break:break-word;"></div>
+    <div id="mp-prompt" style="margin-top:12px;"></div>
+    <div id="mp-interests" style="display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;"></div>
+    <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;padding-bottom:max(20px,env(safe-area-inset-bottom,20px));">
+      <button class="btn-o" onclick="openStatusPicker()">🌙 Set Status</button>
+      <button class="btn-o" onclick="openEditProfile()">✏️ Edit Profile</button>
+      <button onclick="openPage('about')" style="padding:13px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:100px;color:rgba(255,255,255,.6);font-weight:600;font-size:14px;cursor:pointer;">ℹ️ About NeonHeart</button>
+      <button onclick="openPage('privacy')" style="padding:13px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:100px;color:rgba(255,255,255,.6);font-weight:600;font-size:14px;cursor:pointer;">🔒 Privacy Policy</button>
+      <button onclick="handleSignOut()" style="padding:13px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.22);border-radius:100px;color:#f87171;font-weight:700;font-size:14px;cursor:pointer;">Sign Out</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     BOTTOM NAV
+════════════════════════════════════ -->
+<nav id="bnav" style="display:none;background:rgba(13,8,16,.9);border-top:1px solid rgba(255,255,255,.07);flex-shrink:0;" class="safe-bot">
+  <div style="display:flex;justify-content:space-around;padding:5px 0;">
+    <button class="nav-btn" id="nav-home" onclick="navTo('dashboard')" style="padding:6px 18px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.38);display:flex;flex-direction:column;align-items:center;gap:2px;transition:color .2s;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      <span style="font-size:9px;font-weight:700;">Discover</span>
+    </button>
+    <button class="nav-btn" id="nav-matches" onclick="navTo('matches')" style="position:relative;padding:6px 18px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.38);display:flex;flex-direction:column;align-items:center;gap:2px;transition:color .2s;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      <span style="font-size:9px;font-weight:700;">Matches</span>
+      <div id="match-dot" style="display:none;position:absolute;top:4px;right:14px;width:7px;height:7px;background:#e95d8b;border-radius:50%;border:2px solid #0d0810;"></div>
+    </button>
+    <button class="nav-btn" id="nav-explore" onclick="navTo('explore')" style="padding:6px 18px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.38);display:flex;flex-direction:column;align-items:center;gap:2px;transition:color .2s;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span style="font-size:9px;font-weight:700;">Explore</span>
+    </button>
+    <button class="nav-btn" id="nav-profile" onclick="navTo('myprofile')" style="padding:6px 18px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,.38);display:flex;flex-direction:column;align-items:center;gap:2px;transition:color .2s;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0112 0v2"/></svg>
+      <span style="font-size:9px;font-weight:700;">Profile</span>
+    </button>
+  </div>
+</nav>
+
+</div><!-- /max-w container -->
+</div><!-- /#app -->
+
+<!-- ════════ MODALS ════════ -->
+
+<!-- Match Modal -->
+<div class="modal" id="match-modal" style="background:rgba(13,8,16,.96);z-index:300;flex-direction:column;padding:44px 26px;text-align:center;align-items:center;justify-content:center;">
+  <div style="position:relative;margin-bottom:22px;">
+    <div style="position:absolute;inset:-20px;background:#e95d8b;filter:blur(60px);opacity:.2;border-radius:50%;"></div>
+    <div style="display:flex;align-items:center;gap:14px;position:relative;z-index:1;justify-content:center;">
+      <div id="mm-me" style="width:84px;height:84px;border-radius:50%;border:3px solid #e95d8b;overflow:hidden;background:rgba(255,255,255,.08);"></div>
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="#e95d8b" class="anim-bounce"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+      <div id="mm-them" style="width:84px;height:84px;border-radius:50%;border:3px solid #e95d8b;overflow:hidden;background:rgba(255,255,255,.08);"></div>
+    </div>
+  </div>
+  <h2 style="font-size:36px;font-weight:900;letter-spacing:-2px;background:linear-gradient(135deg,#f9a8c9,#e95d8b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-style:italic;margin-bottom:7px;">IT'S A MATCH!</h2>
+  <p style="color:rgba(255,255,255,.45);font-size:15px;margin-bottom:12px;">You and <span id="mm-name" style="color:#fff;font-weight:700;"></span> connected ✨</p>
+  <div id="mm-compat" style="margin-bottom:22px;"></div>
+  <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:270px;">
+    <button class="btn-p" onclick="openMatchChat()">Send a Message 💬</button>
+    <button onclick="closeModal('match-modal')" style="color:rgba(255,255,255,.38);background:none;border:none;cursor:pointer;padding:8px;font-size:14px;">Keep Swiping</button>
+  </div>
+</div>
+
+<!-- Mood Modal -->
+<div class="modal" id="mood-modal" style="background:rgba(13,8,16,.94);z-index:250;flex-direction:column;align-items:stretch;justify-content:flex-end;">
+  <div class="modal-sheet glass" style="background:rgba(20,10,26,.95);padding:26px 24px 36px;">
+    <div style="width:36px;height:4px;background:rgba(255,255,255,.15);border-radius:4px;margin:0 auto 20px;"></div>
+    <h3 style="font-size:20px;font-weight:800;margin-bottom:6px;text-align:center;">What's your vibe today?</h3>
+    <p style="color:rgba(255,255,255,.38);font-size:13px;margin-bottom:20px;text-align:center;">Affects who you see in the feed</p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="mood-opt" onclick="setMood('deep','🧠 Deep conversation')" style="padding:13px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;color:#fff;font-size:14px;font-weight:500;cursor:pointer;text-align:left;transition:all .2s;" onmouseover="this.style.borderColor='rgba(233,93,139,.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,.1)'">🧠 Deep conversation</button>
+      <button class="mood-opt" onclick="setMood('fun','🎉 Fun & playful')" style="padding:13px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;color:#fff;font-size:14px;font-weight:500;cursor:pointer;text-align:left;transition:all .2s;" onmouseover="this.style.borderColor='rgba(233,93,139,.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,.1)'">🎉 Fun & playful</button>
+      <button class="mood-opt" onclick="setMood('adventure','🌍 Adventure & explore')" style="padding:13px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;color:#fff;font-size:14px;font-weight:500;cursor:pointer;text-align:left;transition:all .2s;" onmouseover="this.style.borderColor='rgba(233,93,139,.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,.1)'">🌍 Adventure & explore</button>
+      <button class="mood-opt" onclick="setMood('chill','☕ Just chill & vibe')" style="padding:13px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;color:#fff;font-size:14px;font-weight:500;cursor:pointer;text-align:left;transition:all .2s;" onmouseover="this.style.borderColor='rgba(233,93,139,.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,.1)'">☕ Just chill & vibe</button>
+      <button class="mood-opt" onclick="setMood('serious','💍 Serious connection')" style="padding:13px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;color:#fff;font-size:14px;font-weight:500;cursor:pointer;text-align:left;transition:all .2s;" onmouseover="this.style.borderColor='rgba(233,93,139,.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,.1)'">💍 Serious connection</button>
+    </div>
+    <button onclick="closeModal('mood-modal')" style="margin-top:18px;width:100%;color:rgba(255,255,255,.3);background:none;border:none;font-size:14px;cursor:pointer;">Skip for now</button>
+  </div>
+</div>
+
+<!-- Status Picker Modal -->
+<div class="modal" id="status-modal" style="background:rgba(13,8,16,.94);z-index:250;flex-direction:column;align-items:stretch;justify-content:flex-end;">
+  <div class="modal-sheet" style="background:rgba(20,10,26,.95);border:1px solid rgba(255,255,255,.08);padding:26px 24px 36px;">
+    <div style="width:36px;height:4px;background:rgba(255,255,255,.15);border-radius:4px;margin:0 auto 20px;"></div>
+    <h3 style="font-size:20px;font-weight:800;margin-bottom:18px;">Set Your Status</h3>
+    <div style="display:flex;flex-direction:column;gap:9px;" id="status-opts"></div>
+    <button onclick="closeModal('status-modal')" style="margin-top:16px;width:100%;color:rgba(255,255,255,.3);background:none;border:none;font-size:14px;cursor:pointer;">Cancel</button>
+  </div>
+</div>
+
+<!-- Ice Breaker Modal -->
+<div class="modal" id="game-modal" style="background:rgba(13,8,16,.96);z-index:250;flex-direction:column;align-items:stretch;justify-content:flex-end;">
+  <div class="modal-sheet" style="background:rgba(20,10,26,.95);border:1px solid rgba(255,255,255,.08);padding:26px 24px 36px;max-height:90vh;overflow-y:auto;">
+    <div style="width:36px;height:4px;background:rgba(255,255,255,.15);border-radius:4px;margin:0 auto 20px;"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h3 style="font-size:19px;font-weight:800;">🕵️ Two Truths & a Lie</h3>
+      <button onclick="closeModal('game-modal')" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:50%;width:28px;height:28px;color:rgba(255,255,255,.5);font-size:16px;cursor:pointer;">✕</button>
+    </div>
+    <div id="game-content"></div>
+  </div>
+</div>
+
+<!-- Daily Spark Modal -->
+<div class="modal" id="spark-modal" style="background:rgba(13,8,16,.96);z-index:250;flex-direction:column;align-items:stretch;justify-content:flex-end;">
+  <div class="modal-sheet" style="background:rgba(20,10,26,.95);border:1px solid rgba(255,255,255,.08);padding:26px 24px 36px;">
+    <div style="width:36px;height:4px;background:rgba(255,255,255,.15);border-radius:4px;margin:0 auto 20px;"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h3 style="font-size:19px;font-weight:800;">⚡ Daily Spark</h3>
+      <button onclick="closeModal('spark-modal')" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:50%;width:28px;height:28px;color:rgba(255,255,255,.5);font-size:16px;cursor:pointer;">✕</button>
+    </div>
+    <div id="spark-content"></div>
+  </div>
+</div>
+
+<!-- Report / Block Modal -->
+<div class="modal" id="report-modal" style="background:rgba(13,8,16,.94);z-index:250;flex-direction:column;align-items:stretch;justify-content:flex-end;">
+  <div class="modal-sheet" style="background:rgba(20,10,26,.95);border:1px solid rgba(255,255,255,.08);padding:26px 24px 36px;padding-bottom:max(36px,env(safe-area-inset-bottom,36px));">
+    <div style="width:36px;height:4px;background:rgba(255,255,255,.15);border-radius:4px;margin:0 auto 20px;"></div>
+    <h3 style="font-size:19px;font-weight:800;margin-bottom:18px;">Safety Options</h3>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.16);border-radius:14px;padding:14px 16px;">
+        <p style="font-size:14px;font-weight:600;color:#fbbf24;margin-bottom:8px;">🚩 Report this profile</p>
+        <select id="report-reason-select">
+          <option value="">Select reason…</option>
+          <option value="inappropriate_content">Inappropriate content</option>
+          <option value="harassment">Harassment or abuse</option>
+          <option value="fake_profile">Fake or spam profile</option>
+          <option value="underage">Underage user</option>
+          <option value="other">Other</option>
+        </select>
+        <button onclick="reportUser()" style="margin-top:10px;width:100%;padding:10px;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);border-radius:10px;color:#fbbf24;font-size:13px;font-weight:700;cursor:pointer;">Submit Report</button>
+      </div>
+      <button onclick="removeMatch()" style="padding:14px 16px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:14px;color:#60a5fa;font-size:14px;font-weight:600;cursor:pointer;text-align:left;">💔 Remove match</button>
+      <button onclick="blockUser()" style="padding:14px 16px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:14px;color:#f87171;font-size:14px;font-weight:600;cursor:pointer;text-align:left;">🚫 Block & remove match</button>
+    </div>
+    <button onclick="closeModal('report-modal')" style="margin-top:16px;width:100%;color:rgba(255,255,255,.3);background:none;border:none;font-size:14px;cursor:pointer;">Cancel</button>
+  </div>
+</div>
+
+<!-- About Us Page -->
+<div class="modal" id="page-about" style="background:rgba(13,8,16,.98);z-index:400;flex-direction:column;align-items:stretch;justify-content:flex-start;overflow-y:auto;">
+  <div style="max-width:430px;width:100%;margin:0 auto;min-height:100%;">
+    <!-- Hero with animated background feel -->
+    <div style="position:relative;min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:50px 28px 30px;overflow:hidden;">
+      <div style="position:absolute;top:-30%;left:-20%;width:70%;height:70%;background:radial-gradient(circle,rgba(233,93,139,.18),transparent 70%);pointer-events:none;"></div>
+      <div style="position:absolute;bottom:-20%;right:-10%;width:60%;height:60%;background:radial-gradient(circle,rgba(167,139,250,.12),transparent 70%);pointer-events:none;"></div>
+      <div style="width:72px;height:72px;background:linear-gradient(135deg,#e95d8b,#c0395f);border-radius:22px;display:flex;align-items:center;justify-content:center;margin-bottom:18px;box-shadow:0 0 36px rgba(233,93,139,.4);" class="anim-float">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="white"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+      </div>
+      <h1 style="font-size:30px;font-weight:900;letter-spacing:-1px;background:linear-gradient(135deg,#f9a8c9,#e95d8b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:10px;">About NeonHeart</h1>
+      <p style="color:rgba(255,255,255,.5);font-size:15px;line-height:1.65;max-width:300px;">Built for real people seeking real connections in the digital age.</p>
+    </div>
+    <div style="padding:8px 26px 60px;">
+      <button onclick="closeModal('page-about')" style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.4);background:none;border:none;cursor:pointer;font-size:14px;margin-bottom:28px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Back
+      </button>
+      <!-- Mission -->
+      <div style="background:rgba(233,93,139,.07);border:1px solid rgba(233,93,139,.18);border-radius:18px;padding:22px;margin-bottom:16px;">
+        <p style="font-size:11px;font-weight:700;color:#e95d8b;letter-spacing:.1em;text-transform:uppercase;margin-bottom:9px;">Our Mission</p>
+        <p style="font-size:15px;font-weight:700;margin-bottom:7px;">More than just swiping.</p>
+        <p style="font-size:14px;color:rgba(255,255,255,.6);line-height:1.7;">NeonHeart is built on the belief that meaningful relationships start with real conversations — not just photos. Our compatibility engine, vibe matching, and daily sparks are designed to bring people closer, faster.</p>
+      </div>
+      <!-- Values grid -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:16px;">
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 14px;text-align:center;">
+          <div style="font-size:28px;margin-bottom:8px;">🔒</div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:4px;">Safe & Private</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.45);line-height:1.5;">Your data never sold. Ever.</div>
+        </div>
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 14px;text-align:center;">
+          <div style="font-size:28px;margin-bottom:8px;">✦</div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:4px;">AI-Powered</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.45);line-height:1.5;">Smart matching, not random swiping.</div>
+        </div>
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 14px;text-align:center;">
+          <div style="font-size:28px;margin-bottom:8px;">💬</div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:4px;">Real Conversations</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.45);line-height:1.5;">Ice breakers & daily sparks.</div>
+        </div>
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 14px;text-align:center;">
+          <div style="font-size:28px;margin-bottom:8px;">🛡️</div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:4px;">Moderated</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.45);line-height:1.5;">Report & block tools built in.</div>
+        </div>
+      </div>
+      <!-- Safety -->
+      <div style="background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.18);border-radius:18px;padding:22px;margin-bottom:16px;">
+        <p style="font-size:11px;font-weight:700;color:#4ade80;letter-spacing:.1em;text-transform:uppercase;margin-bottom:9px;">🛡️ Safety First</p>
+        <p style="font-size:14px;color:rgba(255,255,255,.65);line-height:1.7;">Every user can report or block anyone. Suspicious profiles are reviewed. Verified users receive a badge. Your safety is our top priority — always.</p>
+      </div>
+      <!-- Team note -->
+      <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:18px;padding:22px;margin-bottom:16px;">
+        <p style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);letter-spacing:.1em;text-transform:uppercase;margin-bottom:9px;">The Team</p>
+        <p style="font-size:14px;color:rgba(255,255,255,.6);line-height:1.7;">NeonHeart is crafted by a small team passionate about human connection. We believe technology should bring people together — not keep them scrolling alone.</p>
+        <p style="font-size:13px;color:rgba(255,255,255,.35);margin-top:10px;">Made with 💜 · Version 4.0</p>
+      </div>
+      <p style="font-size:13px;color:rgba(255,255,255,.25);text-align:center;">© 2025 NeonHeart. All rights reserved.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Privacy Policy Page -->
+<div class="modal" id="page-privacy" style="background:rgba(13,8,16,.98);z-index:400;flex-direction:column;align-items:stretch;justify-content:flex-start;">
+  <div class="priv-inner">
+    <button onclick="closeModal('page-privacy')" style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.4);background:none;border:none;cursor:pointer;font-size:14px;margin-bottom:22px;padding:0;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Back
+    </button>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap;">
+      <div style="width:44px;height:44px;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.25);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🔒</div>
+      <div>
+        <h1 style="font-size:22px;font-weight:800;margin-bottom:2px;">Privacy Policy</h1>
+        <p style="color:rgba(255,255,255,.35);font-size:12px;">Last updated: January 2025</p>
+      </div>
+    </div>
+    <p style="color:rgba(255,255,255,.5);font-size:14px;line-height:1.7;margin:14px 0 18px;">Your privacy matters deeply to us. This policy explains how NeonHeart collects, uses, and protects your information.</p>
+    <div class="priv-card"><div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;"><span style="font-size:18px;">📦</span><span style="font-size:14px;font-weight:700;">Data We Collect</span></div><p>We collect the information you provide: name, age, email, photos, bio, location, and preferences. We also collect usage data (swipes, matches) to improve your experience.</p></div>
+    <div class="priv-card"><div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;"><span style="font-size:18px;">🔐</span><span style="font-size:14px;font-weight:700;">How We Protect It</span></div><p>All data is encrypted in transit and at rest. We use Firebase (Google Cloud) with strict security rules. Your messages are stored securely and only visible to participants.</p></div>
+    <div class="priv-card"><div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;"><span style="font-size:18px;">🚫</span><span style="font-size:14px;font-weight:700;">What We Never Do</span></div><p>We never sell your personal data to third parties. We never show ads based on your private messages. We never share your location with other users beyond what you choose.</p></div>
+    <div class="priv-card"><div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;"><span style="font-size:18px;">👁️</span><span style="font-size:14px;font-weight:700;">Who Sees Your Data</span></div><p>Other users see only what you add to your profile (name, photos, bio, interests). Your email and phone number are never visible to other users.</p></div>
+    <div class="priv-card"><div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;"><span style="font-size:18px;">❤️</span><span style="font-size:14px;font-weight:700;">Your Likes & Matches</span></div><p>Likes are private — other users only know you liked them if it becomes a mutual match. Match history is stored so you can revisit conversations.</p></div>
+    <div class="priv-card"><div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;"><span style="font-size:18px;">🗑️</span><span style="font-size:14px;font-weight:700;">Delete Your Account</span></div><p>You can delete your account at any time from the Profile page. All your data, messages, and matches will be permanently removed within 30 days.</p></div>
+    <div class="priv-card"><div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;"><span style="font-size:18px;">🍪</span><span style="font-size:14px;font-weight:700;">Cookies & Analytics</span></div><p>We use minimal analytics to understand app usage patterns. No third-party ad trackers are used. You can opt out in your device settings.</p></div>
+    <div class="priv-card"><div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;"><span style="font-size:18px;">📬</span><span style="font-size:14px;font-weight:700;">Contact Us</span></div><p>Questions? Email us at <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d5a5a7bca3b4b6ac95bbb0babbbdb0b4a7a1fbb4a5a5">[email&#160;protected]</a> — we aim to respond within 48 hours.</p></div>
+    <div style="background:rgba(233,93,139,.07);border:1px solid rgba(233,93,139,.18);border-radius:16px;padding:16px;margin-top:4px;">
+      <p style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.7;text-align:center;">By using NeonHeart you agree to this Privacy Policy. We may update it occasionally — we'll notify you of significant changes in the app.</p>
+    </div>
+    <p style="font-size:12px;color:rgba(255,255,255,.2);text-align:center;margin-top:16px;padding-bottom:10px;">© 2025 NeonHeart · All rights reserved</p>
+  </div>
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+/* ═══════════════════════════════════════
+   ANIMATED BACKGROUND — romantic particles + floating hearts
+   Performance-optimized: throttled RAF, reduced blur calls
+═══════════════════════════════════════ */
+(function(){
+  const canvas=document.getElementById('bg-canvas');
+  const ctx=canvas.getContext('2d');
+  let W,H,blobs=[],hearts=[];
+
+  function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight;}
+  resize();
+  window.addEventListener('resize',resize);
+
+  const COLORS=['rgba(233,93,139','rgba(214,93,112','rgba(232,180,80','rgba(255,168,120','rgba(192,57,95','rgba(167,139,250'];
+
+  function makeBlob(){
+    return{x:Math.random()*W,y:Math.random()*H,r:Math.random()*90+35,vx:(Math.random()-.5)*.16,vy:(Math.random()-.5)*.16,color:COLORS[Math.floor(Math.random()*COLORS.length)],alpha:Math.random()*.1+.03,blur:Math.random()*55+28,phase:Math.random()*Math.PI*2,speed:Math.random()*.35+.12};
+  }
+  for(let i=0;i<10;i++)blobs.push(makeBlob());
+
+  function makeHeart(){
+    return{x:Math.random()*W,y:H+20,size:Math.random()*13+5,alpha:Math.random()*.5+.15,vy:-(Math.random()*.5+.2),vx:(Math.random()-.5)*.25,spin:0,spinSpeed:(Math.random()-.5)*.025,wobble:Math.random()*Math.PI*2,wobbleAmp:Math.random()*.02+.008,color:COLORS[Math.floor(Math.random()*4)]};
+  }
+  for(let i=0;i<16;i++){const h=makeHeart();h.y=Math.random()*H;hearts.push(h);}
+
+  function drawHeart(cx,cy,sz,alpha,color){
+    ctx.save();ctx.globalAlpha=alpha;
+    ctx.fillStyle=color+',.85)';ctx.beginPath();
+    const s=sz/2;
+    ctx.moveTo(cx,cy+s*.3);
+    ctx.bezierCurveTo(cx,cy-s*.2,cx-s,cy-s*.25,cx-s,cy-s*.75+s*.2);
+    ctx.bezierCurveTo(cx-s,cy-s*1.25,cx-s*.3,cy-s*1.25,cx,cy-s*.75);
+    ctx.bezierCurveTo(cx+s*.3,cy-s*1.25,cx+s,cy-s*1.25,cx+s,cy-s*.75+s*.2);
+    ctx.bezierCurveTo(cx+s,cy-s*.25,cx,cy-s*.2,cx,cy+s*.3);
+    ctx.fill();ctx.restore();
+  }
+
+  // Throttle to ~30fps for battery savings on low-end devices
+  let lastT=0;
+  function tick(t){
+    requestAnimationFrame(tick);
+    if(t-lastT<32)return; // ~30fps cap
+    lastT=t;
+    ctx.clearRect(0,0,W,H);
+    // Glowing blobs
+    blobs.forEach(s=>{
+      s.x+=s.vx;s.y+=s.vy;
+      if(s.x<-s.r)s.x=W+s.r;if(s.x>W+s.r)s.x=-s.r;
+      if(s.y<-s.r)s.y=H+s.r;if(s.y>H+s.r)s.y=-s.r;
+      const pulse=Math.sin(t*.0008*s.speed+s.phase)*.012+1;
+      const gr=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,s.r*pulse*1.7);
+      gr.addColorStop(0,s.color+','+s.alpha.toFixed(2)+')');
+      gr.addColorStop(1,s.color+',0)');
+      ctx.save();ctx.filter=`blur(${s.blur}px)`;
+      ctx.beginPath();ctx.arc(s.x,s.y,s.r*pulse,0,Math.PI*2);ctx.fillStyle=gr;ctx.fill();ctx.restore();
+    });
+    // Floating hearts
+    hearts.forEach((h,i)=>{
+      h.y+=h.vy;h.x+=h.vx+Math.sin(t*.0008+h.wobble)*h.wobbleAmp*12;
+      h.alpha-=0.0004;h.spin+=h.spinSpeed;
+      if(h.y<-40||h.alpha<=0){hearts[i]=makeHeart();}
+      else{ctx.save();ctx.translate(h.x,h.y);ctx.rotate(h.spin);drawHeart(0,0,h.size,h.alpha,h.color);ctx.restore();}
+    });
+  }
+  requestAnimationFrame(tick);
+})();
+
+/* ═══════════════════════════════════════
+   FIREBASE
+═══════════════════════════════════════ */
+firebase.initializeApp({
+  apiKey:"AIzaSyDsc7eq6y-FmSp5QyNg9PTlg5ZVbUlU_Ok",
+  authDomain:"dating-f5c7f.firebaseapp.com",
+  projectId:"dating-f5c7f",
+  storageBucket:"dating-f5c7f.firebasestorage.app",
+  messagingSenderId:"1068091857220",
+  appId:"1:1068091857220:web:ff9a4fb6625f978bac1f11"
+});
+const auth=firebase.auth(),db=firebase.firestore(),stor=firebase.storage();
+const FV=firebase.firestore.FieldValue;
+
+/* ═══════════════════════════════════════
+   CONSTANTS
+═══════════════════════════════════════ */
+const INTERESTS=["Music","Fitness","Travel","Gaming","Art","Cooking","Tech","Movies","Outdoors","Photography","Reading","Dancing"];
+const QUIZ=[
+  {id:'q1',q:"Your ideal Friday night?",opts:["Cozy home & deep talks","Out dancing until 3am","Hiking at sunset","Hosting a dinner party"]},
+  {id:'q2',q:"You'd describe yourself as…",opts:["Introvert at heart","Total extrovert","Ambivert — depends","Still figuring it out"]},
+  {id:'q3',q:"Conflict in a relationship?",opts:["Talk it out immediately","Need space then reconnect","Write feelings first","Depends on the situation"]},
+  {id:'q4',q:"Love language?",opts:["Quality time","Acts of service","Words of affirmation","Physical touch"]}
+];
+const SPARKS=["What's something you've never told anyone?","If you could live anywhere for a year, where?","Best piece of advice you've ever received?","Describe your perfect day from morning to night.","What skill would you love to learn and why?","What does 'home' mean to you?","What are you most proud of that you never talk about?","If money weren't a factor, what would you do?"];
+const STATUSES=[
+  {key:'chat',emoji:'💬',label:'Looking for chat',color:'rgba(74,222,128'},
+  {key:'busy',emoji:'⚡',label:'Busy right now',color:'rgba(251,191,36'},
+  {key:'lonely',emoji:'🌙',label:'Feeling lonely',color:'rgba(167,139,250'},
+  {key:'meet',emoji:'🌍',label:'Want to meet up',color:'rgba(233,93,139'},
+  {key:'vibing',emoji:'✨',label:'Just vibing',color:'rgba(96,165,250'}
+];
+const MAX_LIKES=20;
+
+/* ═══════════════════════════════════════
+   STATE
+═══════════════════════════════════════ */
+let CU=null,CUD=null,feed=[],feedIdx=0,matches=[],activeMatch=null,activeMsgs=[];
+let typingTimer=null,unsubMsgs=null,unsubTyp=null,unsubMat=null,unsubIn=null;
+let knownMatchIds=new Set(),pendingMatch=null;
+let authMode='login',setupStep=1,photoURL='',selectedInterests=[],quizAnswers={};
+let currentMood=null,currentStatus=null,likesUsedToday=0,userStreak=0;
+let isEditingProfile=false;
+
+/* ═══════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════ */
+const MAIN=['dashboard','matches','explore','myprofile'];
+function showView(n){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+n)?.classList.add('active');
+  const nav=document.getElementById('bnav');
+  nav.style.display=MAIN.includes(n)?'block':'none';
+  ['home','matches','explore','profile'].forEach(x=>document.getElementById('nav-'+x)?.classList.remove('active'));
+  if(n==='dashboard')document.getElementById('nav-home')?.classList.add('active');
+  if(n==='matches')document.getElementById('nav-matches')?.classList.add('active');
+  if(n==='explore')document.getElementById('nav-explore')?.classList.add('active');
+  if(n==='myprofile')document.getElementById('nav-profile')?.classList.add('active');
+}
+function navTo(p){
+  if(!CU){showToast('Sign in first.');return;}
+  if(p==='matches')loadMatches();
+  if(p==='explore')renderExplore();
+  if(p==='myprofile')renderMyProfile();
+  showView(p);
+}
+function backFromChat(){
+  if(unsubMsgs){unsubMsgs();unsubMsgs=null;}
+  if(unsubTyp){unsubTyp();unsubTyp=null;}
+  showView('matches');document.getElementById('bnav').style.display='block';
+  loadMatches();
+}
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function openPage(id){openModal('page-'+id);}
+
+/* ── EDIT PROFILE (from My Profile page) ── */
+function openEditProfile(){
+  isEditingProfile=true;
+  // Pre-fill existing data
+  if(CUD){
+    const n=document.getElementById('s-name');if(n)n.value=CUD.displayName||'';
+    const a=document.getElementById('s-age');if(a)a.value=CUD.age||'';
+    const g=document.getElementById('s-gender');if(g)g.value=CUD.gender||'male';
+    const b=document.getElementById('s-bio');if(b)b.value=CUD.bio||'';
+    const l=document.getElementById('s-loc');if(l)l.value=CUD.location||'';
+    const pq=document.getElementById('s-pq');if(pq)pq.value=CUD.promptQuestion||pq.options[0]?.value||'';
+    const pa=document.getElementById('s-pa');if(pa)pa.value=CUD.promptAnswer||'';
+    if(CUD.interests){selectedInterests=[...CUD.interests];renderInterestsGrid();}
+    if(CUD.quizAnswers)quizAnswers={...CUD.quizAnswers};
+    const prev=document.getElementById('av-prev');if(prev&&CUD.photoURL){prev.innerHTML='';const img=document.createElement('img');img.src=CUD.photoURL;img.style.cssText='width:100%;height:100%;object-fit:cover;';prev.appendChild(img);photoURL=CUD.photoURL;}
+  }
+  const backBtn=document.getElementById('edit-profile-back-btn');
+  if(backBtn){backBtn.style.display='flex';}
+  const titleEl=document.getElementById('profile-setup-title');
+  if(titleEl)titleEl.textContent='Edit Profile';
+  document.getElementById('setup-next').textContent='Save Changes';
+  goStep(1);
+  showView('profile');
+  document.getElementById('bnav').style.display='none';
+}
+function cancelEditProfile(){
+  isEditingProfile=false;
+  const backBtn=document.getElementById('edit-profile-back-btn');
+  if(backBtn)backBtn.style.display='none';
+  const titleEl=document.getElementById('profile-setup-title');
+  if(titleEl)titleEl.textContent='Profile Setup';
+  document.getElementById('setup-next').textContent='Continue';
+  goStep(1);
+  showView('myprofile');
+  document.getElementById('bnav').style.display='block';
+  renderMyProfile();
+}
+
+/* ═══════════════════════════════════════
+   TOAST & NOTIFICATIONS
+═══════════════════════════════════════ */
+let toastT;
+function showToast(msg,ms=2800){
+  const el=document.getElementById('toast');el.textContent=msg;
+  el.style.transform='translateX(-50%) translateY(0)';clearTimeout(toastT);
+  toastT=setTimeout(()=>el.style.transform='translateX(-50%) translateY(-90px)',ms);
+}
+
+function showNotif(icon,title,body,onclick){
+  const banner=document.getElementById('notif-banner');
+  const item=document.createElement('div');
+  item.className='notif-item';
+  item.innerHTML=`<span style="font-size:24px;flex-shrink:0;">${icon}</span><div style="flex:1;overflow:hidden;"><p style="font-weight:700;font-size:14px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${title}</p><p style="font-size:12px;color:rgba(255,255,255,.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${body}</p></div><button onclick="this.parentElement.classList.add('out');setTimeout(()=>this.parentElement.remove(),350)" style="background:none;border:none;color:rgba(255,255,255,.35);font-size:18px;cursor:pointer;flex-shrink:0;">✕</button>`;
+  if(onclick)item.style.cursor='pointer',item.addEventListener('click',e=>{if(e.target.tagName!=='BUTTON'){onclick();}});
+  banner.appendChild(item);
+  setTimeout(()=>{item.classList.add('out');setTimeout(()=>item.remove(),400);},6000);
+}
+
+/* ═══════════════════════════════════════
+   AUTH
+═══════════════════════════════════════ */
+// Helper: wraps a promise with a timeout so Firestore reads never hang forever.
+function withTimeout(promise, ms, fallback){
+  return Promise.race([
+    promise,
+    new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms))
+  ]).catch(e=>{ console.warn('withTimeout caught:',e.message); return fallback; });
+}
+
+// Helper: hide the loader element cleanly.
+function hideLoader(){
+  const ldr=document.getElementById('loader');
+  if(!ldr||ldr.style.display==='none')return;
+  ldr.classList.add('loader-hiding');
+  setTimeout(()=>{ldr.style.display='none';ldr.style.pointerEvents='none';},750);
+}
+
+// ── SPLASH LOGIC ──────────────────────────────────────────────────────────
+// The video splash plays for 3 seconds, then fades out and shows the
+// correct screen. Firebase auth runs in parallel — if it resolves before
+// the 3 s are up the splash still waits the full duration for a polished
+// feel; if it resolves after, the splash hides immediately.
+
+let authResolved=false;
+let splashDone=false;
+let pendingView=null; // the view to show once BOTH timers have elapsed
+
+function trySplashDismiss(){
+  // Only dismiss once both the 3-second timer AND auth have resolved.
+  if(!splashDone||!authResolved)return;
+  hideLoader();
+  if(pendingView){
+    if(pendingView==='dashboard'){
+      showView('dashboard');
+      document.getElementById('bnav').style.display='block';
+      startMatchListener();checkLikedYou();
+    } else if(pendingView==='profile'){
+      showView('profile');renderInterestsGrid();renderQuiz();
+    } else {
+      showView('landing');
+    }
+    pendingView=null;
+  }
+}
+
+// 3-second splash timer — fires regardless of network
+setTimeout(()=>{
+  splashDone=true;
+  trySplashDismiss();
+},3000);
+
+// Hard fallback: if auth never resolves (domain not whitelisted, offline),
+// force dismiss at 6 s and land on login so user is never stuck.
+setTimeout(()=>{
+  if(!authResolved){
+    authResolved=true;
+    pendingView=pendingView||'landing';
+    splashDone=true;
+    trySplashDismiss();
+  }
+},6000);
+
+firebase.auth().onAuthStateChanged(async user=>{
+  authResolved=true;
+  try{
+    if(user){
+      CU=user;
+      try{
+        const snap=await withTimeout(
+          db.collection('users').doc(user.uid).get(),
+          5000,
+          null
+        );
+        if(snap&&snap.exists){
+          CUD=snap.data();
+          updateOnlineStatus(true);
+          loadStreak();loadLikesUsed();
+          await loadFeed();
+          pendingView='dashboard';
+        } else if(!snap){
+          pendingView='landing';
+        } else {
+          pendingView='profile';
+        }
+      }catch(e){
+        console.error('Auth state error:',e);
+        pendingView=e.code==='permission-denied'?'landing':'profile';
+      }
+    } else {
+      CU=null;CUD=null;
+      pendingView='landing';
+    }
+  } finally {
+    trySplashDismiss();
+  }
+});
+
+function showAuth(mode){
+  authMode=mode;
+  document.getElementById('auth-title').textContent=mode==='login'?'Welcome Back':'Join the Future';
+  document.getElementById('auth-submit').textContent=mode==='login'?'Sign In':'Sign Up';
+  document.getElementById('auth-sw-txt').textContent=mode==='login'?"Don't have an account?":"Already have an account?";
+  document.getElementById('auth-sw-btn').textContent=mode==='login'?'Sign Up':'Sign In';
+  document.getElementById('auth-error').style.display='none';
+  showView('auth');
+}
+function toggleAuthMode(){showAuth(authMode==='login'?'signup':'login');}
+async function handleAuth(e){
+  e.preventDefault();
+  const email=e.target.email.value,pass=e.target.password.value;
+  const errEl=document.getElementById('auth-error');errEl.style.display='none';
+  const btn=document.getElementById('auth-submit');btn.textContent='...';btn.disabled=true;
+  try{
+    if(authMode==='login')await auth.signInWithEmailAndPassword(email,pass);
+    else await auth.createUserWithEmailAndPassword(email,pass);
+  }catch(err){
+    errEl.textContent=fErr(err.code);errEl.style.display='block';
+    btn.textContent=authMode==='login'?'Sign In':'Sign Up';btn.disabled=false;
+  }
+}
+async function handleSignOut(){
+  updateOnlineStatus(false);await auth.signOut();
+  CU=null;CUD=null;feed=[];feedIdx=0;matches=[];
+  document.getElementById('bnav').style.display='none';showView('landing');showToast('Signed out 👋');
+}
+function fErr(c){const m={'auth/user-not-found':'No account with that email.','auth/wrong-password':'Incorrect password.','auth/email-already-in-use':'Email already in use.','auth/weak-password':'Password must be 6+ chars.','auth/invalid-email':'Invalid email.','auth/invalid-credential':'Invalid email or password.','auth/network-request-failed':'Network error.'};return m[c]||'Something went wrong.';}
+
+/* ═══════════════════════════════════════
+   ONLINE STATUS
+═══════════════════════════════════════ */
+async function updateOnlineStatus(online){
+  if(!CU)return;
+  try{await db.collection('users').doc(CU.uid).set({online,lastSeen:FV.serverTimestamp()},{merge:true});}catch(e){}
+}
+window.addEventListener('visibilitychange',()=>{if(CU)updateOnlineStatus(document.visibilityState==='visible');});
+window.addEventListener('beforeunload',()=>{if(CU)updateOnlineStatus(false);});
+
+/* ═══════════════════════════════════════
+   GAMIFICATION — STREAKS & LIKES LIMIT
+═══════════════════════════════════════ */
+function todayKey(){return new Date().toDateString();}
+
+function loadStreak(){
+  const s=JSON.parse(localStorage.getItem('nh_streak_'+CU?.uid)||'{"count":0,"last":""}');
+  const yesterday=new Date(Date.now()-86400000).toDateString();
+  if(s.last===todayKey()){userStreak=s.count;}
+  else if(s.last===yesterday){userStreak=s.count;}
+  else{userStreak=0;}
+  renderStreak();
+}
+
+function updateStreak(){
+  const s=JSON.parse(localStorage.getItem('nh_streak_'+CU?.uid)||'{"count":0,"last":""}');
+  if(s.last===todayKey())return;
+  const yesterday=new Date(Date.now()-86400000).toDateString();
+  const newCount=s.last===yesterday?s.count+1:1;
+  localStorage.setItem('nh_streak_'+CU?.uid,JSON.stringify({count:newCount,last:todayKey()}));
+  userStreak=newCount;renderStreak();
+  if(newCount>1)showNotif('🔥',`${newCount} day streak!`,'Keep chatting to maintain it',()=>navTo('matches'));
+}
+
+function renderStreak(){
+  const sd=document.getElementById('streak-display'),sc=document.getElementById('streak-count');
+  const mpS=document.getElementById('mp-streak'),mpN=document.getElementById('mp-streak-num');
+  if(userStreak>=2){
+    if(sd){sd.style.display='inline-flex';sc.textContent=userStreak;}
+    if(mpS){mpS.style.display='inline-flex';mpN.textContent=userStreak;}
+  }
+}
+
+function loadLikesUsed(){
+  const k='nh_likes_'+CU?.uid+'_'+todayKey();
+  likesUsedToday=parseInt(localStorage.getItem(k)||'0');
+  updateLikesDisplay();
+}
+function useLike(){
+  const k='nh_likes_'+CU?.uid+'_'+todayKey();
+  likesUsedToday++;localStorage.setItem(k,likesUsedToday);
+  updateLikesDisplay();
+  if(likesUsedToday>=MAX_LIKES){showToast('Daily like limit reached! Come back tomorrow 💕');}
+}
+function updateLikesDisplay(){
+  const el=document.getElementById('likes-left-count');
+  if(el)el.textContent=Math.max(0,MAX_LIKES-likesUsedToday);
+}
+function canLike(){return likesUsedToday<MAX_LIKES;}
+
+/* ═══════════════════════════════════════
+   STATUS SYSTEM
+═══════════════════════════════════════ */
+function openStatusPicker(){
+  const c=document.getElementById('status-opts');
+  c.innerHTML=STATUSES.map(s=>`
+    <button onclick="setStatus('${s.key}')" style="padding:13px 16px;background:${s.color},.08);border:1px solid ${s.color},.2);border-radius:14px;color:#fff;font-size:14px;font-weight:500;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px;width:100%;">
+      <span style="font-size:20px;">${s.emoji}</span>${s.label}
+    </button>`).join('');
+  openModal('status-modal');
+}
+async function setStatus(key){
+  closeModal('status-modal');
+  const s=STATUSES.find(x=>x.key===key);
+  currentStatus=s;
+  if(CU){
+    try{await db.collection('users').doc(CU.uid).set({status:key,statusLabel:s.label,statusEmoji:s.emoji},{merge:true});}catch(e){}
+    if(CUD)CUD.status=key;
+  }
+  renderMyProfile();
+  showToast(`Status set: ${s.emoji} ${s.label}`);
+}
+
+/* ═══════════════════════════════════════
+   PROFILE SETUP
+═══════════════════════════════════════ */
+function renderInterestsGrid(){
+  const g=document.getElementById('interests-grid');if(!g)return;
+  g.innerHTML=INTERESTS.map(i=>`<button onclick="toggleInterest('${i}',this)" style="padding:7px 14px;border-radius:100px;font-size:13px;font-weight:500;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:rgba(255,255,255,.65);cursor:pointer;transition:all .2s;">${i}</button>`).join('');
+}
+function toggleInterest(n,btn){
+  const i=selectedInterests.indexOf(n);
+  if(i>=0){selectedInterests.splice(i,1);btn.style.background='rgba(255,255,255,.05)';btn.style.borderColor='rgba(255,255,255,.12)';btn.style.color='rgba(255,255,255,.65)';btn.style.boxShadow='';}
+  else{selectedInterests.push(n);btn.style.background='#e95d8b';btn.style.borderColor='#e95d8b';btn.style.color='#fff';btn.style.boxShadow='0 0 10px rgba(233,93,139,.35)';}
+}
+function renderQuiz(){
+  const c=document.getElementById('quiz-container');if(!c)return;
+  c.innerHTML=QUIZ.map((q,qi)=>`<div style="margin-bottom:18px;"><p style="font-size:14px;font-weight:700;margin-bottom:10px;color:rgba(255,255,255,.88);">${qi+1}. ${q.q}</p>${q.opts.map((o,oi)=>`<button class="quiz-opt" id="q${qi}_o${oi}" onclick="selectQ('${q.id}','${o}',${qi},${oi})">${o}</button>`).join('')}</div>`).join('');
+}
+function selectQ(qId,ans,qi,oi){
+  quizAnswers[qId]=ans;
+  QUIZ[qi].opts.forEach((_,i)=>{const b=document.getElementById(`q${qi}_o${i}`);if(b)b.classList.remove('selected');});
+  document.getElementById(`q${qi}_o${oi}`)?.classList.add('selected');
+}
+async function handlePhotoUpload(inp){
+  if(!inp.files||!inp.files[0])return;
+  const file=inp.files[0],prev=document.getElementById('av-prev');prev.innerHTML='';
+  const r=new FileReader();
+  r.onload=e=>{const img=document.createElement('img');img.src=e.target.result;img.style.cssText='width:100%;height:100%;object-fit:cover;';prev.appendChild(img);photoURL=e.target.result;};
+  r.readAsDataURL(file);
+  if(CU){try{const ref=stor.ref('profiles/'+CU.uid);await ref.put(file);photoURL=await ref.getDownloadURL();}catch(e){}}
+}
+async function setupNext(){
+  if(setupStep===1){
+    const name=document.getElementById('s-name').value.trim(),age=parseInt(document.getElementById('s-age').value);
+    if(!name)return showToast('Enter your name.');if(!age||age<18||age>99)return showToast('Valid age required (18+).');
+    goStep(2);
+  } else if(setupStep===2){goStep(3);}
+  else if(setupStep===3){goStep(4);document.getElementById('setup-next').textContent=isEditingProfile?'Save Changes':'Launch Profile 🚀';}
+  else {
+    const data={uid:CU.uid,displayName:document.getElementById('s-name').value.trim(),age:parseInt(document.getElementById('s-age').value),gender:document.getElementById('s-gender').value,bio:document.getElementById('s-bio').value.trim()||'New to NeonHeart!',location:document.getElementById('s-loc').value.trim()||'The Grid',promptQuestion:document.getElementById('s-pq').value,promptAnswer:document.getElementById('s-pa').value.trim(),interests:selectedInterests,quizAnswers,photoURL:photoURL||`https://ui-avatars.com/api/?name=${encodeURIComponent(document.getElementById('s-name').value.trim())}&background=e95d8b&color=fff&size=400`,online:true,lastSeen:FV.serverTimestamp(),blockedUsers:(CUD&&CUD.blockedUsers)||[],verified:(CUD&&CUD.verified)||false};
+    if(!isEditingProfile){data.createdAt=FV.serverTimestamp();}
+    try{
+      await db.collection('users').doc(CU.uid).set(data,{merge:true});
+      CUD={...CUD,...data};
+      if(isEditingProfile){
+        isEditingProfile=false;
+        const backBtn=document.getElementById('edit-profile-back-btn');if(backBtn)backBtn.style.display='none';
+        const titleEl=document.getElementById('profile-setup-title');if(titleEl)titleEl.textContent='Profile Setup';
+        document.getElementById('setup-next').textContent='Continue';
+        showView('myprofile');document.getElementById('bnav').style.display='block';
+        renderMyProfile();showToast('Profile updated! ✨');
+      } else {
+        await loadFeed();showView('dashboard');document.getElementById('bnav').style.display='block';startMatchListener();showToast('Profile live! 🎉');
+      }
+    }catch(e){showToast('Save failed. Check Firestore rules.');console.error(e);}
+  }
+}
+function goStep(n){
+  document.getElementById('step-'+setupStep).style.display='none';
+  const el=document.getElementById('step-'+n);
+  el.style.display=n===1||n===2?'flex':'block';
+  setupStep=n;
+  document.getElementById('setup-lbl').textContent=`Step ${n}/4`;
+  document.getElementById('setup-back').style.display=n>1?'block':'none';
+  if(n<4)document.getElementById('setup-next').textContent='Continue';
+  document.querySelector('#view-profile .scroll-area').scrollTop=0;
+}
+function setupPrev(){if(setupStep>1)goStep(setupStep-1);}
+
+/* ═══════════════════════════════════════
+   COMPATIBILITY
+═══════════════════════════════════════ */
+function compat(a,b){
+  let s=0,t=0;
+  const ai=a.interests||[],bi=b.interests||[];
+  if(ai.length&&bi.length){s+=Math.round((ai.filter(x=>bi.includes(x)).length/Math.max(ai.length,bi.length))*40);t+=40;}
+  const aq=a.quizAnswers||{},bq=b.quizAnswers||{};
+  QUIZ.forEach(q=>{if(aq[q.id]&&bq[q.id]){if(aq[q.id]===bq[q.id])s+=10;t+=10;}});
+  if(a.promptAnswer&&b.promptAnswer){s+=20;t+=20;}
+  if(!t)return null;return Math.round((s/t)*100);
+}
+function compatBadge(sc){
+  if(sc===null)return '';
+  const cls=sc>=70?'cb-hi':sc>=45?'cb-mid':'cb-lo';
+  const lbl=sc>=70?'Great match':sc>=45?'Good vibes':'Different paths';
+  return `<span class="cb ${cls}">✦ ${sc}% — ${lbl}</span>`;
+}
+
+/* ═══════════════════════════════════════
+   MOOD
+═══════════════════════════════════════ */
+function openMoodPicker(){openModal('mood-modal');}
+function setMood(k,l){
+  currentMood=k;document.getElementById('mood-label').textContent=l;
+  closeModal('mood-modal');showToast('Vibe set! ✨');reloadFeed();
+}
+
+/* ═══════════════════════════════════════
+   FEED / SWIPE — lazy loading with cursor-based pagination
+═══════════════════════════════════════ */
+let feedLastDoc=null; // for pagination cursor
+const FEED_PAGE_SIZE=20; // load 20 at a time
+
+async function loadFeed(){
+  if(!CU)return;
+  feedLastDoc=null;feed=[];feedIdx=0;
+  await _fetchFeedPage();
+  renderCards();
+  if(!feed.length)showToast('No profiles yet. Invite friends!');
+}
+
+async function _fetchFeedPage(){
+  if(!CU)return;
+  const bl=(CUD&&CUD.blockedUsers)||[];
+  try{
+    let q=db.collection('users').orderBy('createdAt','desc').limit(FEED_PAGE_SIZE);
+    if(feedLastDoc)q=q.startAfter(feedLastDoc);
+    const snap=await q.get();
+    if(!snap.empty)feedLastDoc=snap.docs[snap.docs.length-1];
+    const users=snap.docs
+      .map(d=>({...d.data(),uid:d.id}))
+      .filter(u=>u.uid!==CU.uid&&!bl.includes(u.uid)&&u.displayName&&u.createdAt);
+    const mi=(CUD&&CUD.interests)||[];
+    // Sort by compatibility + shared interests
+    users.sort((a,b)=>{
+      const ca=compat(CUD||{},a)||0,cb=compat(CUD||{},b)||0;
+      const oa=(a.interests||[]).filter(i=>mi.includes(i)).length;
+      const ob=(b.interests||[]).filter(i=>mi.includes(i)).length;
+      return(ob+cb)-(oa+ca);
+    });
+    feed=[...feed,...users];
+  }catch(e){console.error('Feed load error:',e);showToast('Could not load feed.');}
+}
+
+async function reloadFeed(){feedIdx=0;await loadFeed();}
+
+function renderCards(){
+  const stk=document.getElementById('card-stack'),nm=document.getElementById('no-profiles');
+  // Lazy-load more profiles when near end
+  if(feedIdx>=feed.length-3&&feedLastDoc){
+    _fetchFeedPage().then(()=>{if(feedIdx<feed.length)renderCards();});
+  }
+  if(feedIdx>=feed.length){stk.style.display='none';nm.style.display='flex';return;}
+  nm.style.display='none';stk.style.display='block';stk.innerHTML='';
+  const end=Math.min(feedIdx+3,feed.length);
+  for(let i=end-1;i>=feedIdx;i--)stk.appendChild(mkCard(feed[i],i===feedIdx));
+}
+
+function mkCard(user,isTop){
+  const div=document.createElement('div');
+  div.className='swipe-card'+(isTop?' drag-card':'');div.dataset.uid=user.uid;
+  div.style.cssText='position:absolute;inset:0;border-radius:24px;overflow:hidden;background:#1a0d1e;';
+  const img=document.createElement('img');
+  img.src=user.photoURL||`https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName||'?')}&background=e95d8b&color=fff&size=400`;
+  img.style.cssText='width:100%;height:100%;object-fit:cover;pointer-events:none;';img.referrerPolicy='no-referrer';div.appendChild(img);
+  const gr=document.createElement('div');gr.style.cssText='position:absolute;inset:0;background:linear-gradient(to top,rgba(13,8,16,.95) 0%,rgba(13,8,16,.28) 45%,transparent 70%);';div.appendChild(gr);
+  ['stamp-like LIKE','stamp-nope NOPE','stamp-super ⭐ SUPER'].forEach(s=>{const [c,t]=s.split(' ');const el=document.createElement('div');el.className=c;el.textContent=t;div.appendChild(el);});
+  const sc=CUD?compat(CUD,user):null;
+  // Status badge
+  const statusHtml=user.status?`<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:100px;font-size:10px;font-weight:600;background:rgba(13,8,16,.7);border:1px solid rgba(255,255,255,.15);">${STATUSES.find(x=>x.key===user.status)?.emoji||''} ${user.statusLabel||''}</span>`:'';
+  const verifiedHtml=user.verified?`<span class="verified" title="Verified"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>`:'';
+  const info=document.createElement('div');info.style.cssText='position:absolute;bottom:0;left:0;right:0;padding:16px 14px;';
+  const tags=(user.interests||[]).slice(0,3).map(i=>`<span style="padding:2px 8px;background:rgba(233,93,139,.15);border:1px solid rgba(233,93,139,.3);border-radius:100px;font-size:10px;color:#f9a8c9;">${i}</span>`).join('');
+  const promptH=user.promptQuestion&&user.promptAnswer?`<div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.11);border-radius:10px;padding:8px 12px;margin-bottom:9px;"><p style="font-size:9px;color:rgba(255,255,255,.38);margin-bottom:2px;">${user.promptQuestion}</p><p style="font-size:12px;color:rgba(255,255,255,.82);font-style:italic;">"${user.promptAnswer}"</p></div>`:'';
+  info.innerHTML=`
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+      <h3 style="font-size:22px;font-weight:800;">${user.displayName||'?'}, ${user.age||'?'}</h3>${verifiedHtml}
+      ${sc!==null?`<span class="cb ${sc>=70?'cb-hi':sc>=45?'cb-mid':'cb-lo'}" style="animation:pop .5s ease forwards;">✦ ${sc}%</span>`:''}
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+      <p style="color:rgba(255,255,255,.5);font-size:11px;">📍 ${user.location||'Unknown'}</p>
+      ${statusHtml}
+    </div>
+    ${promptH}
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:11px;">${tags}</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;">
+      <button onclick="event.stopPropagation();doSkip()" style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.07);border:1px solid rgba(248,113,113,.25);color:#f87171;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;" onmouseover="this.style.background='#f87171';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,.07)';this.style.color='#f87171'">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <button onclick="event.stopPropagation();doSuperLike()" style="width:42px;height:42px;border-radius:50%;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.28);color:#fbbf24;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Super Like">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#fbbf24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      </button>
+      <button onclick="event.stopPropagation();doLike()" style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#e95d8b,#c0395f);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 22px rgba(233,93,139,.5);transition:transform .2s;" onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform='scale(1)'">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff"><path d="M12 21.7C10.5 20.6 2 14.8 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.9 4.5 2.3C13.1 3.9 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 6.3-8.5 12.1-10 13.2z"/></svg>
+      </button>
+    </div>`;
+  div.appendChild(info);
+  if(isTop){
+    let sx=0,sy=0,dx=0,drag=false;
+    const ls=div.querySelector('.stamp-like'),ns=div.querySelector('.stamp-nope');
+    function onS(e){drag=true;const p=e.touches?e.touches[0]:e;sx=p.clientX;sy=p.clientY;div.style.transition='none';}
+    function onM(e){if(!drag)return;const p=e.touches?e.touches[0]:e;dx=p.clientX-sx;const dy=p.clientY-sy;div.style.transform=`translate(${dx}px,${dy*.3}px) rotate(${dx*.08}deg)`;ls.style.opacity=Math.max(0,Math.min(1,dx/80));ns.style.opacity=Math.max(0,Math.min(1,-dx/80));}
+    function onE(){if(!drag)return;drag=false;cl();if(dx>100)doLike();else if(dx<-100)doSkip();else{div.style.transition='transform .4s cubic-bezier(.34,1.56,.64,1)';div.style.transform='';ls.style.opacity=0;ns.style.opacity=0;}dx=0;}
+    function cl(){window.removeEventListener('mousemove',onM);window.removeEventListener('mouseup',onE);window.removeEventListener('touchmove',onM);window.removeEventListener('touchend',onE);}
+    div.addEventListener('mousedown',e=>{onS(e);window.addEventListener('mousemove',onM);window.addEventListener('mouseup',onE);});
+    div.addEventListener('touchstart',e=>{onS(e);window.addEventListener('touchmove',onM,{passive:true});window.addEventListener('touchend',onE);},{passive:true});
+  }
+  return div;
+}
+
+function animOut(card,dir){card.style.transition='transform .42s ease,opacity .32s';card.style.transform=`translate(${dir==='r'?150:-150}%,-8%) rotate(${dir==='r'?18:-18}deg)`;card.style.opacity='0';setTimeout(()=>card.remove(),430);}
+
+function doSkip(){const c=document.querySelector('#card-stack .swipe-card:last-child');if(c)animOut(c,'l');feedIdx++;setTimeout(renderCards,440);}
+
+async function doLike(){
+  if(!canLike()){showToast('Daily limit reached! Come back tomorrow 💕',3000);return;}
+  const user=feed[feedIdx];const c=document.querySelector('#card-stack .swipe-card:last-child');
+  if(c)animOut(c,'r');feedIdx++;setTimeout(renderCards,440);if(!user||!CU)return;
+  useLike();updateStreak();
+  try{
+    await db.collection('likes').doc(`${CU.uid}_${user.uid}`).set({fromUid:CU.uid,toUid:user.uid,createdAt:FV.serverTimestamp()});
+    const mutual=await db.collection('likes').doc(`${user.uid}_${CU.uid}`).get();
+    if(mutual.exists){
+      const mid=[CU.uid,user.uid].sort().join('_');
+      await db.collection('matches').doc(mid).set({users:[CU.uid,user.uid],createdAt:FV.serverTimestamp()},{merge:true});
+      pendingMatch=user;showMatchModal(user);
+    }
+  }catch(e){console.error(e);showToast('Like failed — check Firestore rules.');}
+}
+async function doSuperLike(){
+  if(!canLike()){showToast('Daily limit reached! 💕',3000);return;}
+  const user=feed[feedIdx];const c=document.querySelector('#card-stack .swipe-card:last-child');
+  const st=c?.querySelector('.stamp-super');if(st){st.style.opacity='1';setTimeout(()=>{if(c)animOut(c,'r');},320);}else if(c)animOut(c,'r');
+  feedIdx++;setTimeout(renderCards,470);if(!user||!CU)return;
+  useLike();showToast(`⭐ Super liked ${user.displayName}!`);
+  try{
+    await db.collection('likes').doc(`${CU.uid}_${user.uid}`).set({fromUid:CU.uid,toUid:user.uid,superLike:true,createdAt:FV.serverTimestamp()});
+    const mutual=await db.collection('likes').doc(`${user.uid}_${CU.uid}`).get();
+    if(mutual.exists){const mid=[CU.uid,user.uid].sort().join('_');await db.collection('matches').doc(mid).set({users:[CU.uid,user.uid],createdAt:FV.serverTimestamp()},{merge:true});pendingMatch=user;showMatchModal(user);}
+  }catch(e){showToast('Super Like failed.');}
+}
+
+/* ═══════════════════════════════════════
+   INCOMING MATCH LISTENER
+═══════════════════════════════════════ */
+function startMatchListener(){
+  if(unsubIn)unsubIn();knownMatchIds=new Set();
+  const q=db.collection('matches').where('users','array-contains',CU.uid);
+  q.get().then(snap=>{
+    snap.docs.forEach(d=>knownMatchIds.add(d.id));
+    unsubIn=q.onSnapshot(snap=>{
+      snap.docChanges().forEach(async ch=>{
+        if(ch.type==='added'&&!knownMatchIds.has(ch.doc.id)){
+          knownMatchIds.add(ch.doc.id);
+          const data=ch.doc.data(),otherUid=data.users.find(id=>id!==CU.uid);
+          if(!otherUid||(pendingMatch&&pendingMatch.uid===otherUid))return;
+          try{const ou=await db.collection('users').doc(otherUid).get();if(ou.exists){pendingMatch=ou.data();showMatchModal(ou.data());document.getElementById('match-dot').style.display='block';showNotif('💜','New Match!',`You and ${ou.data().displayName} connected`,()=>navTo('matches'));}}catch(e){}
+        } else {knownMatchIds.add(ch.doc.id);}
+      });
+    });
+  }).catch(()=>{});
+}
+
+/* ═══════════════════════════════════════
+   WHO LIKED YOU
+═══════════════════════════════════════ */
+async function checkLikedYou(){
+  if(!CU)return;
+  try{const snap=await db.collection('likes').where('toUid','==',CU.uid).get();if(snap.docs.length){document.getElementById('who-liked-btn').style.display='block';document.getElementById('who-liked-count').textContent=`👀 ${snap.docs.length} liked you`;}}catch(e){}
+}
+
+/* ═══════════════════════════════════════
+   MATCH MODAL
+═══════════════════════════════════════ */
+function showMatchModal(other){
+  const sp=(id,url)=>{const el=document.getElementById(id);el.innerHTML='';if(url){const img=document.createElement('img');img.src=url;img.referrerPolicy='no-referrer';img.style.cssText='width:100%;height:100%;object-fit:cover;';el.appendChild(img);}};
+  sp('mm-me',CUD?.photoURL);sp('mm-them',other?.photoURL);
+  document.getElementById('mm-name').textContent=other?.displayName||'them';
+  const sc=CUD?compat(CUD,other):null;document.getElementById('mm-compat').innerHTML=sc!==null?compatBadge(sc):'';
+  openModal('match-modal');
+}
+function openMatchChat(){closeModal('match-modal');if(pendingMatch){const mid=[CU.uid,pendingMatch.uid].sort().join('_');openChat({id:mid,users:[CU.uid,pendingMatch.uid],otherUser:pendingMatch});}}
+
+/* ═══════════════════════════════════════
+   MATCHES LIST
+═══════════════════════════════════════ */
+async function loadMatches(){
+  if(!CU)return;
+  document.getElementById('match-dot').style.display='none';
+  const list=document.getElementById('matches-list');
+  list.innerHTML=`<div style="display:flex;justify-content:center;padding:40px;"><div style="width:28px;height:28px;border:2px solid rgba(233,93,139,.2);border-top-color:#e95d8b;border-radius:50%;" class="anim-spin"></div></div>`;
+  if(unsubMat)unsubMat();
+  unsubMat=db.collection('matches').where('users','array-contains',CU.uid).onSnapshot(async snap=>{
+    const ms=await Promise.all(snap.docs.map(async d=>{const data=d.data(),ou=data.users.find(id=>id!==CU.uid);try{const s=await db.collection('users').doc(ou).get();return{...data,id:d.id,otherUser:s.data()};}catch(e){return{...data,id:d.id,otherUser:null};}}));
+    matches=ms.filter(m=>m.otherUser);renderMatchesList();
+  });
+}
+function renderMatchesList(){
+  const list=document.getElementById('matches-list');
+  if(!matches.length){list.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 22px;text-align:center;opacity:.5;"><div style="font-size:42px;margin-bottom:12px;">💬</div><p style="font-weight:600;font-size:15px;">No matches yet</p><p style="font-size:13px;margin-top:4px;color:rgba(255,255,255,.4);">Keep swiping!</p></div>`;return;}
+  const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:10px;';
+  matches.forEach(m=>{
+    const sc=CUD?compat(CUD,m.otherUser):null;
+    // Outer wrapper — position relative for remove button
+    const wrap=document.createElement('div');
+    wrap.className='match-wrap';
+    wrap.style.cssText='position:relative;';
+    const sObj=m.otherUser.status?STATUSES.find(x=>x.key===m.otherUser.status):null;
+    const btn=document.createElement('button');
+    btn.style.cssText='position:relative;width:100%;aspect-ratio:3/4;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.09);cursor:pointer;background:#1a0d1e;text-align:left;padding:0;display:block;';
+    btn.innerHTML=`<img src="${m.otherUser.photoURL||`https://ui-avatars.com/api/?name=${encodeURIComponent(m.otherUser.displayName||'?')}&background=e95d8b&color=fff&size=400`}" style="width:100%;height:100%;object-fit:cover;" referrerpolicy="no-referrer"><div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(13,8,16,.92),transparent 55%);"></div><div style="position:absolute;bottom:0;left:0;right:0;padding:10px;"><div style="display:flex;align-items:center;gap:4px;"><p style="font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.otherUser.displayName||'?'}</p>${m.otherUser.verified?'<span class="verified" style="width:13px;height:13px;"><svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>':''}</div><div style="display:flex;align-items:center;gap:4px;margin-top:2px;"><div style="width:6px;height:6px;border-radius:50%;background:${m.otherUser.online?'#4ade80':'#4b5563'};${m.otherUser.online?'box-shadow:0 0 5px #4ade80;':''}"></div><span style="font-size:10px;color:rgba(255,255,255,.38);">${m.otherUser.online?'Online':'Offline'}</span>${sObj?`<span style="font-size:9px;color:rgba(255,255,255,.38);">· ${sObj.emoji}</span>`:''}</div>${sc!==null?`<p style="font-size:9px;font-weight:700;margin-top:2px;color:${sc>=70?'#4ade80':sc>=45?'#fbbf24':'rgba(255,255,255,.28)'};">✦ ${sc}%</p>`:''}</div>`;
+    btn.onclick=()=>openChatById(m.id);
+    // Remove match button (visible on hover/touch)
+    const rmBtn=document.createElement('button');
+    rmBtn.className='remove-match-btn';
+    rmBtn.innerHTML='✕';
+    rmBtn.title='Remove match';
+    rmBtn.onclick=(e)=>removeMatchFromGrid(m.id,e);
+    wrap.appendChild(btn);
+    wrap.appendChild(rmBtn);
+    grid.appendChild(wrap);
+  });
+  list.innerHTML='';list.appendChild(grid);
+}
+function openChatById(id){const m=matches.find(x=>x.id===id);if(m)openChat(m);}
+
+/* ═══════════════════════════════════════
+   CHAT
+═══════════════════════════════════════ */
+function openChat(match){
+  activeMatch=match;const other=match.otherUser;
+  document.getElementById('chat-name').textContent=other?.displayName||'?';
+  document.getElementById('chat-status').textContent=other?.online?'Online':'Offline';
+  document.getElementById('chat-dot').style.background=other?.online?'#4ade80':'#4b5563';
+  document.getElementById('chat-dot').style.boxShadow=other?.online?'0 0 5px #4ade80':'none';
+  const sa=id=>{const el=document.getElementById(id);el.innerHTML='';if(other?.photoURL){const img=document.createElement('img');img.src=other.photoURL;img.referrerPolicy='no-referrer';img.style.cssText='width:100%;height:100%;object-fit:cover;';el.appendChild(img);}};
+  sa('chat-av');sa('typ-av');
+  document.getElementById('spark-banner').style.display='none';
+  showView('chat');document.getElementById('bnav').style.display='none';
+  subMsgs();subTyp();checkSparkBanner();
+}
+function subMsgs(){if(unsubMsgs)unsubMsgs();const q=db.collection('matches').doc(activeMatch.id).collection('messages').orderBy('createdAt','asc').limit(100);unsubMsgs=q.onSnapshot(snap=>{activeMsgs=snap.docs.map(d=>({...d.data(),id:d.id}));renderMsgs();});}
+function subTyp(){if(unsubTyp)unsubTyp();unsubTyp=db.collection('matches').doc(activeMatch.id).onSnapshot(snap=>{const data=snap.data(),ou=activeMatch.users.find(id=>id!==CU.uid);document.getElementById('typing-indicator').style.display=(data?.typing?.[ou])?'block':'none';scrollBot();});}
+function renderMsgs(){
+  const area=document.getElementById('messages-area');
+  if(!activeMsgs.length){area.innerHTML=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;opacity:.45;gap:7px;"><div style="font-size:36px;">💬</div><p style="font-size:14px;">Say hi to <strong>${activeMatch.otherUser?.displayName||'them'}</strong>!</p></div>`;return;}
+  area.innerHTML='<div style="flex:1;min-height:16px;"></div>'+activeMsgs.map(msg=>{
+    const own=msg.senderUid===CU.uid,time=msg.createdAt?.toDate().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})||'';
+    let content='';
+    if(msg.deleted){
+      // Show placeholder for deleted messages
+      content=`<span style="font-size:13px;color:rgba(255,255,255,.28);font-style:italic;">🗑 Message deleted</span>`;
+      return `<div class="msg-wrap" style="display:flex;flex-direction:column;max-width:78%;${own?'align-self:flex-end;align-items:flex-end;':'align-self:flex-start;align-items:flex-start;'}">
+        <div style="padding:8px 12px;border-radius:${own?'16px 16px 4px 16px':'16px 16px 16px 4px'};background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);">${content}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.2);margin-top:2px;padding:0 3px;">${time}</div>
+      </div>`;
+    }
+    if(msg.mediaURL){
+      if(msg.mediaType==='video'){
+        content=`<video src="${msg.mediaURL}" class="msg-media-vid" controls playsinline></video>`;
+      } else {
+        content=`<img src="${msg.mediaURL}" class="msg-media-img" onclick="window.open('${msg.mediaURL}','_blank')" alt="Image">`;
+      }
+    } else if(msg.gamePrompt){
+      content=`<div style="font-size:10px;color:rgba(167,139,250,.8);margin-bottom:3px;">🕵️ Two Truths & a Lie</div><div style="font-size:14px;line-height:1.5;">${msg.gamePrompt}</div>`;
+    } else if(msg.sparkQuestion){
+      content=`<div style="font-size:10px;color:#fbbf24;margin-bottom:3px;">⚡ Daily Spark</div><em style="font-size:14px;">${msg.sparkQuestion}</em>${msg.sparkAnswer?`<div style="margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.1);font-size:13px;">"${msg.sparkAnswer}"</div>`:''}`;
+    } else {
+      content=msg.text||'';
+    }
+    // Delete button only for own non-deleted messages
+    const deleteBtn=own?`<button class="msg-delete-btn" onclick="deleteMsg('${msg.id}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg> Delete</button>`:'';
+    return `<div class="msg-wrap" style="display:flex;flex-direction:column;max-width:78%;${own?'align-self:flex-end;align-items:flex-end;':'align-self:flex-start;align-items:flex-start;'}">
+      <div style="padding:${msg.mediaURL?'4px':'10px 13px'};border-radius:${own?'16px 16px 4px 16px':'16px 16px 16px 4px'};font-size:14px;line-height:1.5;overflow:hidden;${own?'background:linear-gradient(135deg,#e95d8b,#c0395f);color:#fff;':'background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:#fff;'}">${content}</div>
+      <div style="display:flex;align-items:center;gap:3px;margin-top:2px;padding:0 3px;">${deleteBtn}<span style="font-size:10px;color:rgba(255,255,255,.25);">${time}</span>${own?'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(233,93,139,.6)" stroke-width="2.5"><polyline points="17 1 9 15 1 8"/><polyline points="23 1 15 15 7 8"/></svg>':''}</div>
+    </div>`;
+  }).join('');
+  scrollBot();
+}
+
+function scrollBot(){const a=document.getElementById('messages-area');setTimeout(()=>a.scrollTop=a.scrollHeight,50);}
+
+async function sendMessage(e){
+  e.preventDefault();const inp=document.getElementById('msg-inp'),text=inp.value.trim();
+  if(!text||!activeMatch)return;inp.value='';await setTyp(false);
+  try{await db.collection('matches').doc(activeMatch.id).collection('messages').add({matchId:activeMatch.id,senderUid:CU.uid,text,createdAt:FV.serverTimestamp()});}
+  catch(e){showToast('Send failed.');}
+  updateStreak();
+}
+
+/* ── DELETE MESSAGE ── */
+async function deleteMsg(msgId){
+  if(!activeMatch||!CU||!msgId){showToast('Cannot delete message.');return;}
+  // Verify the message belongs to current user before deleting
+  const msg=activeMsgs.find(m=>m.id===msgId);
+  if(msg&&msg.senderUid!==CU.uid){showToast('You can only delete your own messages.');return;}
+  try{
+    const msgRef=db.collection('matches').doc(activeMatch.id).collection('messages').doc(msgId);
+    // Build update payload — soft delete, clear text, remove media fields
+    const updatePayload={deleted:true,text:''};
+    // Only try to delete mediaURL if the message had one (avoids "field not found" errors)
+    if(msg&&msg.mediaURL){
+      updatePayload.mediaURL=FV.delete();
+      updatePayload.mediaType=FV.delete();
+      // Also try to delete from Storage if we stored the path
+      if(msg.storagePath){
+        try{await stor.ref(msg.storagePath).delete();}catch(e){/* storage delete is best-effort */}
+      }
+    }
+    await msgRef.update(updatePayload);
+    // Optimistic UI update — mark local copy as deleted immediately
+    const idx=activeMsgs.findIndex(m=>m.id===msgId);
+    if(idx>-1){activeMsgs[idx]={...activeMsgs[idx],deleted:true,text:'',mediaURL:undefined};renderMsgs();}
+  }catch(e){
+    console.error('Delete msg error:',e);
+    if(e.code==='not-found'||e.message?.includes('No document')){
+      showToast('Message already deleted.');
+    } else {
+      showToast('Could not delete message. Check Firestore rules.');
+    }
+  }
+}
+
+/* ── MEDIA MESSAGES ── */
+async function sendMediaMessage(inp){
+  if(!inp.files||!inp.files[0]){return;}
+  if(!activeMatch||!CU){showToast('Open a chat first.');inp.value='';return;}
+  const file=inp.files[0];
+  const isVideo=file.type.startsWith('video/');
+  const isImage=file.type.startsWith('image/');
+  if(!isVideo&&!isImage){showToast('Only images and videos supported.');inp.value='';return;}
+  const maxSize=isVideo?50*1024*1024:10*1024*1024;
+  if(file.size>maxSize){showToast(`File too large. Max ${isVideo?'50MB':'10MB'}.`);inp.value='';return;}
+
+  // Show upload progress toast
+  const sendBtn=document.querySelector('#chat-form button[type="submit"]');
+  if(sendBtn)sendBtn.disabled=true;
+  showToast('Uploading… 📤');
+
+  try{
+    // Build storage path
+    const ext=file.name.split('.').pop().toLowerCase()||'bin';
+    const storagePath=`chat_media/${activeMatch.id}/${CU.uid}_${Date.now()}.${ext}`;
+    const ref=stor.ref(storagePath);
+
+    // Upload with metadata
+    const metadata={contentType:file.type,customMetadata:{matchId:activeMatch.id,senderUid:CU.uid}};
+    const uploadTask=ref.put(file,metadata);
+
+    // Track upload progress
+    uploadTask.on('state_changed',
+      snapshot=>{
+        const pct=Math.round((snapshot.bytesTransferred/snapshot.totalBytes)*100);
+        showToast(`Uploading… ${pct}% 📤`);
+      },
+      error=>{
+        console.error('Upload error:',error);
+        let msg='Upload failed.';
+        if(error.code==='storage/unauthorized')msg='Upload failed: check Firebase Storage rules.';
+        else if(error.code==='storage/canceled')msg='Upload cancelled.';
+        showToast(msg);
+        if(sendBtn)sendBtn.disabled=false;
+        inp.value='';
+      },
+      async()=>{
+        // Upload complete — get download URL
+        try{
+          const url=await ref.getDownloadURL();
+          // Save message to Firestore
+          const msgRef=await db.collection('matches').doc(activeMatch.id).collection('messages').add({
+            matchId:activeMatch.id,
+            senderUid:CU.uid,
+            text:'',
+            mediaURL:url,
+            mediaType:isVideo?'video':'image',
+            storagePath, // store path so we can delete from storage later
+            createdAt:FV.serverTimestamp(),
+            deleted:false
+          });
+          showToast(isVideo?'Video sent 🎬':'Image sent 📸');
+          inp.value='';
+          if(sendBtn)sendBtn.disabled=false;
+          scrollBot();
+        }catch(e){
+          console.error('Firestore media message save error:',e);
+          showToast('Upload done but failed to save message. Check Firestore rules.');
+          inp.value='';
+          if(sendBtn)sendBtn.disabled=false;
+        }
+      }
+    );
+  }catch(err){
+    console.error('Media send error:',err);
+    showToast('Upload failed. Check Firebase Storage rules.');
+    inp.value='';
+    if(sendBtn)sendBtn.disabled=false;
+  }
+}
+
+/* ── NOTE: Media messages are stored persistently.
+   Use deleteMsg() to manually delete media messages.
+   Storage cleanup happens automatically when a message is deleted. ── */
+async function setTyp(v){if(!activeMatch||!CU)return;try{await db.collection('matches').doc(activeMatch.id).set({typing:{[CU.uid]:v}},{merge:true});}catch(e){}}
+function handleTypingInput(){setTyp(true);clearTimeout(typingTimer);typingTimer=setTimeout(()=>setTyp(false),2000);}
+
+/* ═══════════════════════════════════════
+   REPORT & BLOCK
+═══════════════════════════════════════ */
+function openReportModal(){openModal('report-modal');}
+
+async function reportUser(){
+  if(!activeMatch||!CU){showToast('Cannot submit report.');return;}
+  const reasonEl=document.getElementById('report-reason-select');
+  const reason=reasonEl?.value||'';
+  if(!reason){showToast('Please select a reason first! 🚩');reasonEl?.focus();return;}
+  // Show loading on submit button
+  const submitBtn=document.querySelector('#report-modal .modal-sheet button[onclick="reportUser()"]');
+  if(submitBtn){submitBtn.textContent='Submitting…';submitBtn.disabled=true;}
+  const reportedUid=activeMatch.otherUser?.uid;
+  const reportData={
+    reporterUid:CU.uid,
+    reporterName:CUD?.displayName||CU.email||'Unknown',
+    reportedUid:reportedUid||'unknown',
+    reportedName:activeMatch.otherUser?.displayName||'Unknown',
+    matchId:activeMatch.id,
+    reason,
+    timestamp:FV.serverTimestamp(),
+    status:'pending'
+  };
+  try{
+    await db.collection('reports').add(reportData);
+    // Optionally send email notification via EmailJS
+    sendReportEmail({...reportData,timestamp:new Date().toISOString()});
+    closeModal('report-modal');
+    showToast('Report submitted. Thank you for keeping NeonHeart safe 🛡️');
+  }catch(e){
+    console.error('Report error:',e);
+    if(submitBtn){submitBtn.textContent='Submit Report';submitBtn.disabled=false;}
+    showToast('Report failed. Please try again.');
+  }
+}
+
+/**
+ * Send report email via EmailJS.
+ * Replace SERVICE_ID, TEMPLATE_ID, PUBLIC_KEY with your EmailJS credentials.
+ * Create a template with variables: {{reporter_uid}}, {{reporter_name}},
+ * {{reported_uid}}, {{reported_name}}, {{reason}}, {{match_id}}, {{timestamp}}
+ */
+function sendReportEmail(data){
+  // Load EmailJS SDK if not already loaded
+  if(typeof emailjs==='undefined'){
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js';
+    s.onload=()=>{
+      emailjs.init('YOUR_EMAILJS_PUBLIC_KEY'); // ← replace with your public key
+      emailjs.send('YOUR_SERVICE_ID','YOUR_TEMPLATE_ID',{ // ← replace with your IDs
+        reporter_uid:data.reporterUid,
+        reporter_name:data.reporterName,
+        reported_uid:data.reportedUid,
+        reported_name:data.reportedName,
+        reason:data.reason,
+        match_id:data.matchId,
+        timestamp:data.timestamp
+      }).catch(e=>console.warn('EmailJS send failed:',e));
+    };
+    document.head.appendChild(s);
+  } else {
+    emailjs.send('YOUR_SERVICE_ID','YOUR_TEMPLATE_ID',{
+      reporter_uid:data.reporterUid,
+      reporter_name:data.reporterName,
+      reported_uid:data.reportedUid,
+      reported_name:data.reportedName,
+      reason:data.reason,
+      match_id:data.matchId,
+      timestamp:data.timestamp
+    }).catch(e=>console.warn('EmailJS send failed:',e));
+  }
+}
+
+async function blockUser(){
+  closeModal('report-modal');
+  if(!activeMatch||!CU){showToast('Cannot block: not in a chat.');return;}
+  const blockedUid=activeMatch.otherUser?.uid;
+  if(!blockedUid){showToast('Cannot find user to block.');return;}
+  const matchId=activeMatch.id;
+  showToast('Blocking user…');
+  try{
+    // 1. Add blocked UID to current user's blockedUsers array in Firestore
+    await db.collection('users').doc(CU.uid).update({blockedUsers:FV.arrayUnion(blockedUid)});
+  }catch(e){
+    // .update() fails if field doesn't exist yet — fall back to .set with merge
+    try{await db.collection('users').doc(CU.uid).set({blockedUsers:FV.arrayUnion(blockedUid)},{merge:true});}
+    catch(e2){console.error('Block: could not write blockedUsers:',e2);showToast('Block failed. Check Firestore rules.');return;}
+  }
+  // 2. Update local CUD state immediately
+  if(CUD){if(!CUD.blockedUsers)CUD.blockedUsers=[];if(!CUD.blockedUsers.includes(blockedUid))CUD.blockedUsers.push(blockedUid);}
+  // 3. Remove match document (messages sub-collection + match doc)
+  try{await removeMatchDoc(matchId);}catch(e){console.error('Block: removeMatchDoc failed:',e);}
+  // 4. Update local arrays immediately so UI reflects block
+  matches=matches.filter(m=>m.id!==matchId);
+  feed=feed.filter(u=>u.uid!==blockedUid);
+  showToast('User blocked 🚫');
+  backFromChat();
+}
+
+async function removeMatch(){
+  closeModal('report-modal');
+  if(!activeMatch||!CU){showToast('Cannot remove match.');return;}
+  const matchId=activeMatch.id;
+  try{
+    await removeMatchDoc(matchId);
+  }catch(e){console.error('Remove match error:',e);showToast('Remove failed. Check Firestore rules.');return;}
+  // Update local state immediately
+  matches=matches.filter(m=>m.id!==matchId);
+  showToast('Match removed 💔');
+  backFromChat();
+}
+
+// Remove match document + all messages (called by block & remove match)
+async function removeMatchDoc(matchId){
+  if(!matchId)throw new Error('No matchId provided');
+  // Delete messages in batches of 100 until none remain
+  const msgsRef=db.collection('matches').doc(matchId).collection('messages');
+  let hasMore=true;
+  while(hasMore){
+    const snap=await msgsRef.limit(100).get();
+    if(snap.empty){hasMore=false;break;}
+    const batch=db.batch();
+    snap.docs.forEach(d=>batch.delete(d.ref));
+    await batch.commit();
+    hasMore=snap.docs.length===100;
+  }
+  // Delete the match document itself
+  await db.collection('matches').doc(matchId).delete();
+}
+
+// Remove match button in matches grid (called without entering chat)
+async function removeMatchFromGrid(matchId,e){
+  e&&e.stopPropagation();
+  if(!matchId||!CU)return;
+  if(!confirm('Remove this match?'))return;
+  try{await removeMatchDoc(matchId);}catch(e){console.error(e);}
+  matches=matches.filter(m=>m.id!==matchId);
+  renderMatchesList();
+  showToast('Match removed 💔');
+}
+
+/* ═══════════════════════════════════════
+   ICE BREAKER
+═══════════════════════════════════════ */
+function openGameModal(){
+  document.getElementById('game-content').innerHTML=`
+    <div style="background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.18);border-radius:14px;padding:16px;margin-bottom:16px;">
+      <p style="font-size:14px;font-weight:600;line-height:1.6;color:rgba(255,255,255,.88);">Write two true statements and one lie about yourself. Send it to <strong>${activeMatch?.otherUser?.displayName||'your match'}</strong> — they have to guess the lie! 🕵️</p>
+    </div>
+    <textarea id="tt-inp" class="inp" rows="5" placeholder="1. I've climbed two mountains.&#10;2. I speak three languages.&#10;3. I once slept in a treehouse for a week." style="resize:none;margin-bottom:13px;font-size:13px;line-height:1.6;"></textarea>
+    <button class="btn-p" onclick="sendTwoTruths()">Send to ${activeMatch?.otherUser?.displayName||'them'} 🎮</button>`;
+  openModal('game-modal');
+}
+async function sendTwoTruths(){
+  const text=document.getElementById('tt-inp')?.value.trim();if(!text||!activeMatch||!CU)return showToast('Write something first!');
+  closeModal('game-modal');
+  try{await db.collection('matches').doc(activeMatch.id).collection('messages').add({matchId:activeMatch.id,senderUid:CU.uid,text:'',gamePrompt:text,gameName:'Two Truths & a Lie',createdAt:FV.serverTimestamp()});showToast('Game sent! 🕵️');}
+  catch(e){showToast('Failed. Check Firestore rules.');}
+}
+
+/* ═══════════════════════════════════════
+   DAILY SPARK
+═══════════════════════════════════════ */
+function todaySpark(){return SPARKS[Math.floor(Date.now()/(1000*60*60*24))%SPARKS.length];}
+async function checkSparkBanner(){
+  if(!activeMatch||!CU)return;
+  try{
+    const snap=await db.collection('matches').doc(activeMatch.id).collection('messages').orderBy('createdAt','desc').limit(40).get();
+    const ou=activeMatch.users.find(id=>id!==CU.uid),msgs=snap.docs.map(d=>d.data());
+    const theirSpark=msgs.find(m=>m.senderUid===ou&&m.sparkAnswer);
+    const mySpark=msgs.find(m=>m.senderUid===CU.uid&&m.sparkAnswer);
+    if(theirSpark&&!mySpark){document.getElementById('spark-banner').style.display='block';showNotif('⚡','Daily Spark!',`${activeMatch.otherUser?.displayName} answered today's spark`,()=>openSparkModal());}
+  }catch(e){}
+}
+async function openSparkModal(){
+  const spark=todaySpark(),c=document.getElementById('spark-content');
+  let myAns='',theirAns='',theirName=activeMatch?.otherUser?.displayName||'them';
+  try{
+    const snap=await db.collection('matches').doc(activeMatch.id).collection('messages').orderBy('createdAt','desc').limit(50).get();
+    const ou=activeMatch.users.find(id=>id!==CU.uid),msgs=snap.docs.map(d=>d.data());
+    const tm=msgs.find(m=>m.senderUid===ou&&m.sparkAnswer),mm=msgs.find(m=>m.senderUid===CU.uid&&m.sparkAnswer);
+    if(tm)theirAns=tm.sparkAnswer;if(mm)myAns=mm.sparkAnswer;
+  }catch(e){}
+  c.innerHTML=`
+    <div style="background:linear-gradient(135deg,rgba(251,191,36,.13),rgba(251,146,60,.07));border:1px solid rgba(251,191,36,.18);border-radius:14px;padding:15px;margin-bottom:16px;">
+      <p style="font-size:10px;color:#fbbf24;font-weight:700;margin-bottom:6px;letter-spacing:.08em;">TODAY'S SPARK ⚡</p>
+      <p style="font-size:15px;font-weight:600;line-height:1.5;">"${spark}"</p>
+    </div>
+    ${theirAns?`<div style="background:rgba(255,255,255,.05);border-radius:13px;padding:12px;margin-bottom:13px;"><p style="font-size:10px;color:rgba(255,255,255,.38);margin-bottom:4px;">${theirName}'s answer:</p><p style="font-size:14px;line-height:1.6;">"${theirAns}"</p></div>`:''}
+    ${myAns?`<div style="background:rgba(233,93,139,.07);border:1px solid rgba(233,93,139,.18);border-radius:13px;padding:12px;"><p style="font-size:10px;color:#f9a8c9;margin-bottom:4px;">Your answer:</p><p style="font-size:14px;line-height:1.6;">"${myAns}"</p></div>`:`<textarea id="spark-inp" class="inp" rows="4" placeholder="Your answer…" style="resize:none;margin-bottom:11px;"></textarea><button class="btn-g" onclick="submitSpark('${spark.replace(/'/g,"\\'")}')">Share Your Spark ⚡</button>`}`;
+  openModal('spark-modal');
+}
+async function submitSpark(q){
+  const ans=document.getElementById('spark-inp')?.value.trim();if(!ans)return showToast('Write your answer first!');if(!activeMatch||!CU)return;
+  try{
+    await db.collection('matches').doc(activeMatch.id).collection('messages').add({matchId:activeMatch.id,senderUid:CU.uid,text:'',sparkQuestion:q,sparkAnswer:ans,createdAt:FV.serverTimestamp()});
+    closeModal('spark-modal');document.getElementById('spark-banner').style.display='none';showToast('Spark shared! ⚡');
+  }catch(e){console.error(e);showToast('Failed. Check Firestore rules.');}
+}
+
+/* ═══════════════════════════════════════
+   EXPLORE
+═══════════════════════════════════════ */
+function renderExplore(){
+  const grid=document.getElementById('explore-grid');grid.innerHTML='';
+  if(!feed.length){grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px;opacity:.38;font-size:14px;">No profiles to explore yet.</div>`;return;}
+  feed.forEach(user=>{
+    const sc=CUD?compat(CUD,user):null,card=document.createElement('div');
+    card.style.cssText='position:relative;aspect-ratio:2/3;border-radius:16px;overflow:hidden;background:#1a0d1e;cursor:pointer;border:1px solid rgba(255,255,255,.07);';
+    const sObj=user.status?STATUSES.find(x=>x.key===user.status):null;
+    card.innerHTML=`<img src="${user.photoURL||`https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName||'?')}&background=e95d8b&color=fff&size=400`}" style="width:100%;height:100%;object-fit:cover;" referrerpolicy="no-referrer"><div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(13,8,16,.92),transparent 50%);"></div><div style="position:absolute;bottom:0;left:0;right:0;padding:9px;"><div style="display:flex;align-items:center;gap:3px;"><p style="font-weight:700;font-size:13px;">${user.displayName||'?'}, ${user.age||'?'}</p>${user.verified?'<span class="verified" style="width:12px;height:12px;"><svg width="6" height="6" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>':''}</div><p style="font-size:10px;color:rgba(255,255,255,.38);">${user.location||''}${sObj?` · ${sObj.emoji}`:''}</p>${sc!==null?`<p style="font-size:9px;font-weight:700;margin-top:2px;color:${sc>=70?'#4ade80':sc>=45?'#fbbf24':'rgba(255,255,255,.28)'};">✦ ${sc}%</p>`:''}</div>${user.online?'<div style="position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 5px #4ade80;border:2px solid #0d0810;"></div>':''}`;
+    card.onclick=()=>showUserProfile(user);grid.appendChild(card);
+  });
+}
+
+function showUserProfile(user){
+  const sc=CUD?compat(CUD,user):null,modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;z-index:500;background:rgba(13,8,16,.98);overflow-y:auto;';
+  const tags=(user.interests||[]).map(i=>`<span style="padding:4px 11px;border-radius:100px;background:rgba(233,93,139,.1);border:1px solid rgba(233,93,139,.22);font-size:12px;color:#f9a8c9;">${i}</span>`).join('');
+  const sObj=user.status?STATUSES.find(x=>x.key===user.status):null;
+  modal.innerHTML=`<div style="max-width:430px;margin:0 auto;"><div style="position:relative;height:320px;"><img src="${user.photoURL||`https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName||'?')}&background=e95d8b&color=fff&size=400`}" style="width:100%;height:100%;object-fit:cover;" referrerpolicy="no-referrer"><div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(13,8,16,.92),transparent 50%);"></div><button onclick="this.closest('[style*=fixed]').remove()" style="position:absolute;top:14px;left:14px;width:32px;height:32px;background:rgba(13,8,16,.7);border:1px solid rgba(255,255,255,.14);border-radius:50%;color:#fff;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button><div style="position:absolute;bottom:16px;left:16px;"><div style="display:flex;align-items:center;gap:6px;"><h2 style="font-size:24px;font-weight:800;">${user.displayName||'?'}, ${user.age||'?'}</h2>${user.verified?'<span class="verified"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>':''}</div><p style="color:rgba(255,255,255,.5);font-size:12px;">${user.location||''}${sObj?` · ${sObj.emoji} ${sObj.label}`:''}</p></div></div><div style="padding:20px;">${sc!==null?`<div style="margin-bottom:13px;">${compatBadge(sc)}</div>`:''} ${user.promptQuestion&&user.promptAnswer?`<div style="background:rgba(255,255,255,.05);border-radius:12px;padding:12px;margin-bottom:13px;"><p style="font-size:10px;color:rgba(255,255,255,.38);margin-bottom:4px;">${user.promptQuestion}</p><p style="font-size:14px;font-style:italic;">"${user.promptAnswer}"</p></div>`:''}<p style="color:rgba(255,255,255,.65);font-size:14px;line-height:1.7;margin-bottom:13px;">${user.bio||''}</p><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;">${tags}</div><div style="display:flex;gap:10px;"><button onclick="this.closest('[style*=fixed]').remove()" class="btn-o" style="flex:1;padding:12px;">Skip</button><button onclick="doLikeUser('${user.uid}',this)" class="btn-p" style="flex:1;padding:12px;">Like ❤️</button></div></div></div>`;
+  document.body.appendChild(modal);
+}
+async function doLikeUser(uid,btn){
+  if(!canLike()){showToast('Daily limit reached! 💕');return;}
+  if(btn){btn.textContent='Liked ❤️';btn.disabled=true;}
+  const user=feed.find(u=>u.uid===uid);if(!user||!CU){showToast('Liked! ❤️');return;}useLike();
+  try{
+    await db.collection('likes').doc(`${CU.uid}_${uid}`).set({fromUid:CU.uid,toUid:uid,createdAt:FV.serverTimestamp()});
+    const mutual=await db.collection('likes').doc(`${uid}_${CU.uid}`).get();
+    if(mutual.exists){const mid=[CU.uid,uid].sort().join('_');await db.collection('matches').doc(mid).set({users:[CU.uid,uid],createdAt:FV.serverTimestamp()},{merge:true});document.querySelector('[style*=fixed]')?.remove();pendingMatch=user;showMatchModal(user);}
+    else showToast(`Liked ${user.displayName}! ❤️`);
+  }catch(e){showToast('Like failed.');}
+}
+
+/* ═══════════════════════════════════════
+   MY PROFILE
+═══════════════════════════════════════ */
+function renderMyProfile(){
+  if(!CUD)return;
+  // Cover photo
+  const cover=document.getElementById('mpc');
+  if(CUD.photoURL){cover.style.backgroundImage=`url(${CUD.photoURL})`;cover.style.backgroundSize='cover';cover.style.backgroundPosition='center';}
+  else{cover.style.backgroundImage='';cover.style.background='linear-gradient(135deg,#e95d8b,#c0395f)';}
+  // Avatar
+  const av=document.getElementById('mp-av');av.innerHTML='';
+  if(CUD.photoURL){const img=document.createElement('img');img.src=CUD.photoURL;img.referrerPolicy='no-referrer';img.style.cssText='width:100%;height:100%;object-fit:cover;';av.appendChild(img);}
+  // Name / meta
+  const nameEl=document.getElementById('mp-name');
+  nameEl.innerHTML=`${CUD.displayName||'?'}, ${CUD.age||'?'}${CUD.verified?'<span class="verified" style="width:18px;height:18px;margin-left:4px;"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>':''}`;
+  document.getElementById('mp-meta').textContent=`${CUD.gender||''} · ${CUD.location||''}`;
+  document.getElementById('mp-bio').textContent=CUD.bio||'';
+  // Status
+  const sd=document.getElementById('mp-status-display');
+  if(CUD.status){const s=STATUSES.find(x=>x.key===CUD.status);sd.innerHTML=s?`<span class="status-pill" style="border-color:${s.color},.3);color:${s.color},.8);">${s.emoji} ${s.label}</span>`:'';} else sd.innerHTML='';
+  // Prompt
+  const pEl=document.getElementById('mp-prompt');
+  pEl.innerHTML=CUD.promptQuestion&&CUD.promptAnswer?`<div style="background:rgba(255,255,255,.05);border-radius:12px;padding:12px;"><p style="font-size:10px;color:rgba(255,255,255,.38);margin-bottom:4px;">${CUD.promptQuestion}</p><p style="font-size:14px;font-style:italic;color:rgba(255,255,255,.75);">"${CUD.promptAnswer}"</p></div>`:'';
+  // Interests
+  document.getElementById('mp-interests').innerHTML=(CUD.interests||[]).map(i=>`<span style="padding:5px 12px;border-radius:100px;background:rgba(233,93,139,.08);border:1px solid rgba(233,93,139,.22);font-size:12px;color:#f9a8c9;">${i}</span>`).join('');
+  renderStreak();
+}
+
+/* ═══════════════════════════════════════
+   INIT
+═══════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded',()=>{renderInterestsGrid();renderQuiz();});
+
+/*
+  FIRESTORE RULES NEEDED:
+  - collection 'users': read/write authenticated users, blockedUsers array-union
+  - collection 'likes': read/write authenticated
+  - collection 'matches': read/write if user in users array
+  - collection 'matches/{id}/messages': read/write if authenticated
+  - collection 'reports': write authenticated, read only admin
+  - storage 'profiles/{uid}': read public, write owner
+  - storage 'chat_media/{matchId}/*': read/write if match participant
+
+  EMAILJS SETUP (for report emails):
+  1. Create account at emailjs.com
+  2. Create email service + template with vars:
+     {{reporter_uid}}, {{reporter_name}}, {{reported_uid}},
+     {{reported_name}}, {{reason}}, {{match_id}}, {{timestamp}}
+  3. Replace YOUR_EMAILJS_PUBLIC_KEY, YOUR_SERVICE_ID, YOUR_TEMPLATE_ID
+     in the sendRep
