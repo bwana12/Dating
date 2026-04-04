@@ -918,7 +918,7 @@ function trySplashDismiss(){
 setTimeout(()=>{
   splashDone=true;
   trySplashDismiss();
-},3000);
+},6000);
 
 // Fallback: if auth never resolves (offline / permission error), force landing after 6s
 setTimeout(()=>{
@@ -927,7 +927,7 @@ setTimeout(()=>{
     pendingView='landing';
     trySplashDismiss();
   }
-},6000);
+},9000);
 
 // Video error / autoplay fallback – ensures splash still hides
 const loaderVideo=document.getElementById('loader-video');
