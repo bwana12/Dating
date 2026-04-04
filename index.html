@@ -336,7 +336,7 @@ select option{background:#1a0d1e;color:#fff;}
   <div style="flex:1;padding:0 13px 7px;display:flex;flex-direction:column;min-height:0;overflow:hidden;">
     <div id="card-stack" style="position:relative;flex:1;min-height:0;"></div>
     <div id="no-profiles" style="display:none;flex:1;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px;">
-      <div style="font-size:48px;margin-bottom:14px;" class="anim-float">✨</div>
+      <div style="font-size:48px;margin-bottom:14px;" class="anim-float">☄️</div>
       <h3 style="font-size:20px;font-weight:700;margin-bottom:7px;">You're all caught up!</h3>
       <p style="color:rgba(255,255,255,.38);font-size:14px;margin-bottom:20px;">New profiles appear daily. Come back tomorrow!</p>
       <button class="btn-o" style="width:auto;padding:11px 26px;" onclick="reloadFeed()">Refresh</button>
@@ -754,7 +754,7 @@ const FV=firebase.firestore.FieldValue;
 /* ═══════════════════════════════════════
    CONSTANTS
 ═══════════════════════════════════════ */
-const INTERESTS=["Music","Fitness","Travel","Gaming","Art","Cooking","Tech","Movies","Outdoors","Photography","Reading","Dancing"];
+const INTERESTS=["Music","Fitness","Volleyball","Football","Basketball","Tennis","Travel","Gaming","Art","Cooking","Anime","COD","Fre-fire","Pubg","Tech","Movies","Outdoors","Photography","Reading","Dancing"];
 const QUIZ=[
   {id:'q1',q:"Your ideal Friday night?",opts:["Cozy home & deep talks","Out dancing until 3am","Hiking at sunset","Hosting a dinner party"]},
   {id:'q2',q:"You'd describe yourself as…",opts:["Introvert at heart","Total extrovert","Ambivert — depends","Still figuring it out"]},
@@ -764,10 +764,10 @@ const QUIZ=[
 const SPARKS=["What's something you've never told anyone?","If you could live anywhere for a year, where?","Best piece of advice you've ever received?","Describe your perfect day from morning to night.","What skill would you love to learn and why?","What does 'home' mean to you?","What are you most proud of that you never talk about?","If money weren't a factor, what would you do?"];
 const STATUSES=[
   {key:'chat',emoji:'💬',label:'Looking for chat',color:'rgba(74,222,128'},
-  {key:'busy',emoji:'⚡',label:'Busy right now',color:'rgba(251,191,36'},
-  {key:'lonely',emoji:'🌙',label:'Feeling lonely',color:'rgba(167,139,250'},
-  {key:'meet',emoji:'🌍',label:'Want to meet up',color:'rgba(233,93,139'},
-  {key:'vibing',emoji:'✨',label:'Just vibing',color:'rgba(96,165,250'}
+  {key:'busy',emoji:'🧑‍💼',label:'Busy right now',color:'rgba(251,191,36'},
+  {key:'lonely',emoji:'🥺',label:'Feeling lonely',color:'rgba(167,139,250'},
+  {key:'meet',emoji:'😜',label:'Want to meet up',color:'rgba(233,93,139'},
+  {key:'vibing',emoji:'😁',label:'Just vibing',color:'rgba(96,165,250'}
 ];
 const MAX_LIKES=20;
 
@@ -1200,10 +1200,10 @@ function mkCard(user,isTop){
   
   // ✅ TASK 1: Gender symbol mapping
   const genderSymbol = {
-    'male': '♂',
-    'female': '♀',
-    'non-binary': '⚧',
-    'other': '✨'
+    'male': '👨',
+    'female': '👩',
+    'non-binary': '🦍',
+    'other': '🌠'
   }[user.gender] || '';
   
   // Status badge
@@ -1754,10 +1754,10 @@ function renderExplore(){
     const sObj=user.status?STATUSES.find(x=>x.key===user.status):null;
     // Gender symbol for explore card
     const genderSymbolExplore = {
-      'male': '♂',
-      'female': '♀',
-      'non-binary': '⚧',
-      'other': '✨'
+      'male': '👨',
+      'female': '👩',
+      'non-binary': '🦍',
+      'other': '🌠'
     }[user.gender] || '';
     card.innerHTML=`<img src="${user.photoURL||`https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName||'?')}&background=e95d8b&color=fff&size=400`}" style="width:100%;height:100%;object-fit:cover;" referrerpolicy="no-referrer"><div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(13,8,16,.92),transparent 50%);"></div><div style="position:absolute;bottom:0;left:0;right:0;padding:9px;"><div style="display:flex;align-items:center;gap:3px;"><p style="font-weight:700;font-size:13px;">${user.displayName||'?'}, ${user.age||'?'} ${genderSymbolExplore}</p>${user.verified?'<span class="verified" style="width:12px;height:12px;"><svg width="6" height="6" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>':''}</div><p style="font-size:10px;color:rgba(255,255,255,.38);">${user.location||''}${sObj?` · ${sObj.emoji}`:''}</p>${sc!==null?`<p style="font-size:9px;font-weight:700;margin-top:2px;color:${sc>=70?'#4ade80':sc>=45?'#fbbf24':'rgba(255,255,255,.28)'};">✦ ${sc}%</p>`:''}</div>${user.online?'<div style="position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 5px #4ade80;border:2px solid #0d0810;"></div>':''}`;
     card.onclick=()=>showUserProfile(user);grid.appendChild(card);
