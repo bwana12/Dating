@@ -1590,8 +1590,8 @@ function sendReportEmail(data){
     const s=document.createElement('script');
     s.src='https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js';
     s.onload=()=>{
-      emailjs.init('YOUR_EMAILJS_PUBLIC_KEY'); // ← replace with your public key
-      emailjs.send('YOUR_SERVICE_ID','YOUR_TEMPLATE_ID',{ // ← replace with your IDs
+      emailjs.init('yf6sGDSdGYT92N0Du'); // ← replace with your public key
+      emailjs.send('service_9l3kphy','template_60hwso6',{ // ← replace with your IDs
         reporter_uid:data.reporterUid,
         reporter_name:data.reporterName,
         reported_uid:data.reportedUid,
@@ -1603,7 +1603,7 @@ function sendReportEmail(data){
     };
     document.head.appendChild(s);
   } else {
-    emailjs.send('YOUR_SERVICE_ID','YOUR_TEMPLATE_ID',{
+    emailjs.send('service_9l3kphy','template_60hwso6',{
       reporter_uid:data.reporterUid,
       reporter_name:data.reporterName,
       reported_uid:data.reportedUid,
